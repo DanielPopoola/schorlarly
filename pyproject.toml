@@ -1,0 +1,15 @@
+[project]
+name = "schorlarly"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi[all]>=0.128.0",
+    "ruff>=0.14.10",
+]
+
+[dependency-groups]
+dev = [
+    "ty>=0.0.8",
+]
