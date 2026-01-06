@@ -60,6 +60,7 @@ thoughts/
 GEMINI.md
 BaseImplementationPlan.md
 UpdatedImplementationPlan.md
+logs/
 # Django stuff:
 *.log
 local_settings.py

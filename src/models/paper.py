@@ -1,11 +1,13 @@
 from enum import Enum
 from dataclasses import dataclass
 
+
 @dataclass(frozen=True)
 class Finding:
     text: str
     source_ids: list[str]
     section_id: int
+
 
 @dataclass(frozen=True)
 class SectionSummary:
@@ -21,7 +23,8 @@ class EvidenceType(Enum):
     STATISTICAL_RESULT = "statistical_result"
     THEORETICAL_CLAIM = "theoretical_claim"
     METHODOLOGICAL = "methodological"
-    BACKGROUND = "background"           
+    BACKGROUND = "background"
+
 
 @dataclass(frozen=True)
 class Claim:
@@ -32,7 +35,7 @@ class Claim:
     evidence_type: EvidenceType
     tags: list[str]
     page_number: int | None
-    section_in_source : str | None
+    section_in_source: str | None
     confidence: float = 1.0
     extracted_at: str | None = None
 
@@ -46,10 +49,12 @@ class IssueType(Enum):
     STYLE_MISMATCH = "style_mismatch"
     TERMINOLOGY_INCONSISTENT = "terminology_inconsistent"
 
+
 class Severity(Enum):
     CRITICAL = "critical"
     WARNING = "warning"
     INFO = "info"
+
 
 @dataclass(frozen=True)
 class ValidationIssue:
@@ -58,6 +63,7 @@ class ValidationIssue:
     message: str
     suggestion: str | None
     location: str | None
+
 
 @dataclass(frozen=True)
 class ValidationResult:

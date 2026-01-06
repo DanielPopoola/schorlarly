@@ -15,6 +15,7 @@ class ClaimStore:
         self.storage_path = storage_path
         self.claims_file = storage_path / "claims.json"
         self.index_file = storage_path / "claims.faiss"
+        self._claims_cache: dict[str, Claim] | None = None
 
         self.embedding_provider = embedding_provider
         self.storage_path.mkdir(parents=True, exist_ok=True)
@@ -37,7 +38,7 @@ class ClaimStore:
 
         claim_id_int = self._claim_id_to_int(claim.claim_id)
 
-        self.index.add_with_ids(vector, np.array([claim_id_int], dtype="int64")) # type: ignore[arg-type]
+        self.index.add_with_ids(vector, np.array([claim_id_int], dtype="int64"))  # type: ignore[arg-type]
         self._save_claim_to_json(claim)
         self._save_index()
 
@@ -54,7 +55,7 @@ class ClaimStore:
         vector = np.array([embedding], dtype="float32")
         faiss.normalize_L2(vector)
 
-        _, ids = self.index.search(vector, top_k) # type: ignore[arg-type]
+        _, ids = self.index.search(vector, top_k)  # type: ignore[arg-type]
 
         claims = self._load_claims()
         results: list[Claim] = []
@@ -74,6 +75,8 @@ class ClaimStore:
     def _load_or_create_index(self, dimension: int) -> faiss.IndexIDMap:
         if self.index_file.exists():
             index = faiss.read_index(str(self.index_file))
+            if not isinstance(index, faiss.IndexIDMap):
+                raise TypeError(f"Expected IndexIDMap, got {type(index)}")
             if index.d != dimension:
                 raise ValueError("Embedding dimension mismatch with stored FAISS index")
             return index
@@ -85,15 +88,21 @@ class ClaimStore:
         faiss.write_index(self.index, str(self.index_file))
 
     def _load_claims(self) -> dict[str, Claim]:
+        if self._claims_cache is not None:
+            return self._claims_cache
+
         if not self.claims_file.exists():
+            self._claims_cache = {}
             return {}
 
         with open(self.claims_file, "r") as f:
             data = json.load(f)
-            return {
+            self._claims_cache = {
                 cid: from_dict(data_class=Claim, data=c_dict)
                 for cid, c_dict in data.items()
             }
+
+        return self._claims_cache
 
     def _save_claim_to_json(self, claim: Claim) -> None:
         claims = self._load_claims()
