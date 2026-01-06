@@ -9,4 +9,5 @@ class GlobalState:
     decisions_made: list[str]
     current_section_id: int
     total_tokens_used : int
-    retry_count: dict[int, int]
+    cost_usd: float
+    retry_counts: dict[int, int]
