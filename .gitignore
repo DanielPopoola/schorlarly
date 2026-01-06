@@ -55,6 +55,11 @@ cover/
 *.mo
 *.pot
 
+.gemini/
+thoughts/
+GEMINI.md
+BaseImplementationPlan.md
+UpdatedImplementationPlan.md
 # Django stuff:
 *.log
 local_settings.py
