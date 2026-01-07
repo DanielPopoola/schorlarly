@@ -1,32 +1,42 @@
 from .state import GlobalState
 from .paper import (
-    Claim,
+    Section,
     Citation,
+    Claim,
+    Finding,
+    SectionSummary,
     EvidenceType,
+    SectionStatus,
+)
+from .research import (
+    SearchResult,
+    CitationReference,
+    Question,
+    ResearchPlan,
+)
+from .validation import (
     IssueType,
     Severity,
-    Section,
-    Finding,
-    SectionStatus,
-    SectionSummary,
     ValidationIssue,
     ValidationResult,
 )
-from .search import SearchResult
 
 
 __all__ = [
     "GlobalState",
-    "Claim",
+    "Section",
     "Citation",
+    "Claim",
     "Finding",
+    "SectionSummary",
+    "EvidenceType",
+    "SectionStatus",
     "IssueType",
     "Severity",
-    "Section",
-    "SectionStatus",
-    "EvidenceType",
-    "SectionSummary",
-    "SearchResult",
     "ValidationIssue",
     "ValidationResult",
+    "SearchResult",
+    "CitationReference",
+    "Question",
+    "ResearchPlan",
 ]

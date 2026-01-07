@@ -8,13 +8,6 @@ from src.storage.embedding import (
     HuggingFaceEmbeddings,
     SentenceTransformerEmbeddings,
 )
-from src.modules.search_provider import (
-    ArxivProvider,
-    SearchProvider,
-    SemanticScholarProvider,
-    PerplexitySearchProvider,
-    OpenRouterSearchProvider,
-)
 
 
 class SearchBackend(Enum):
@@ -57,29 +50,6 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         env_file=".env", env_file_encoding="utf-8", extra="ignore"
     )
-
-
-def get_search_provider() -> SearchProvider:
-    backend = SearchBackend(settings.SEARCH_BACKEND)
-
-    if backend == SearchBackend.PERPLEXITY:
-        if not settings.PERPLEXITY_API_KEY:
-            raise ValueError("PERPLEXITY_API_KEY not set")
-        return PerplexitySearchProvider(settings.PERPLEXITY_API_KEY)
-
-    elif backend == SearchBackend.SEMANTIC_SCHOLAR:
-        return SemanticScholarProvider(settings.SEMANTIC_SCHOLAR_API_KEY)
-
-    elif backend == SearchBackend.ARXIV:
-        return ArxivProvider()
-
-    elif backend == SearchBackend.OPENROUTER:
-        if not settings.OPENROUTER_API_KEY:
-            raise ValueError("OPENROUTER_API_KEY not set")
-        return OpenRouterSearchProvider(settings.OPENROUTER_API_KEY)
-
-    else:
-        raise ValueError(f"Unknown search backend: {backend}")
 
 
 def get_embedding_provider() -> EmbeddingProvider:
