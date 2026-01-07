@@ -13,6 +13,7 @@ from src.modules.search_provider import (
     SearchProvider,
     SemanticScholarProvider,
     PerplexitySearchProvider,
+    OpenRouterSearchProvider,
 )
 
 
@@ -20,15 +21,17 @@ class SearchBackend(Enum):
     PERPLEXITY = "perplexity"
     SEMANTIC_SCHOLAR = "semantic_scholar"
     ARXIV = "arxiv"
+    OPENROUTER = "open_router"
 
 
 class Settings(BaseSettings):
     ANTHROPIC_API_KEY: str | None = None
     OPENAI_API_KEY: str | None = None
     GEMINI_API_KEY: str | None = None
+    OPENROUTER_API_KEY: str | None = None
 
     # Research settings
-    SEARCH_BACKEND: str = "perplexity"
+    SEARCH_BACKEND: str = "open_router"
     PERPLEXITY_API_KEY: str | None = None
     SEMANTIC_SCHOLAR_API_KEY: str | None = None
     MAX_PAPERS_PER_QUERY: int = 10
@@ -69,6 +72,11 @@ def get_search_provider() -> SearchProvider:
 
     elif backend == SearchBackend.ARXIV:
         return ArxivProvider()
+
+    elif backend == SearchBackend.OPENROUTER:
+        if not settings.OPENROUTER_API_KEY:
+            raise ValueError("OPENROUTER_API_KEY not set")
+        return OpenRouterSearchProvider(settings.OPENROUTER_API_KEY)
 
     else:
         raise ValueError(f"Unknown search backend: {backend}")
