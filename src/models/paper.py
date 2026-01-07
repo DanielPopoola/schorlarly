@@ -40,6 +40,31 @@ class Claim:
     extracted_at: str | None = None
 
 
+class SectionStatus(Enum):
+    DRAFT = "draft"
+    VALIDATED = "validated"
+    APPROVED = "approved"
+    FAILED = "failed"
+
+
+@dataclass(frozen=True)
+class Citation:
+    claim_id: str
+    quoted_text: str
+    location_in_section: int  # Character position
+
+
+@dataclass
+class Section:
+    section_id: int
+    title: str
+    content: str  # The actual written text
+    citations: list[Citation]  # Extracted citations
+    word_count: int
+    status: SectionStatus = SectionStatus.DRAFT
+    created_at: str | None = None
+
+
 class IssueType(Enum):
     CITATION_MISSING = "citation_missing"
     CITATION_INVALID = "citation_invalid"

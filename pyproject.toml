@@ -6,6 +6,7 @@ readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "anthropic>=0.75.0",
+    "arxiv>=2.4.0",
     "dacite>=1.9.2",
     "faiss-cpu>=1.13.2",
     "fastapi[all]>=0.128.0",
@@ -13,6 +14,7 @@ dependencies = [
     "loguru>=0.7.3",
     "numpy>=2.4.0",
     "openai>=2.14.0",
+    "perplexityai>=0.22.2",
     "pre-commit>=4.5.1",
     "pydantic-settings>=2.12.0",
     "pytest>=9.0.2",
