@@ -20,24 +20,68 @@ class SemanticScholarProvider(SearchProvider):
         }
 
         response = requests.get(
-            f"{self.base_url}/paper/search", params=params, headers=headers
+            f"{self.base_url}/paper/search",
+            params=params,
+            headers=headers,
         )
         response.raise_for_status()
 
         data = response.json()
-        return [
-            SearchResult(
-                source_id=paper["paperId"],
-                title=paper["title"],
-                content=paper.get("abstract", ""),
-                authors=[a["name"] for a in paper.get("authors", [])],
-                year=paper.get("year"),
-                url=paper.get("url"),
-                citations=[],  # Would need separate API call
-                metadata={"citation_count": paper.get("citationCount", 0)},
+        results: list[SearchResult] = []
+
+        for paper in data.get("data", []):
+            paper_id = paper["paperId"]
+
+            citations = self._fetch_citations(
+                paper_id=paper_id,
+                limit=5,  # hard cap for safety
             )
-            for paper in data.get("data", [])
-        ]
+
+            results.append(
+                SearchResult(
+                    source_id=paper_id,
+                    title=paper["title"],
+                    content=paper.get("abstract", ""),
+                    authors=[a["name"] for a in paper.get("authors", [])],
+                    year=paper.get("year"),
+                    url=paper.get("url"),
+                    citations=citations,
+                    metadata={
+                        "citation_count": paper.get("citationCount", 0),
+                        "provider": "semantic_scholar",
+                    },
+                )
+            )
+
+        return results
 
     def supports_full_text(self) -> bool:
         return False
+
+    def _fetch_citations(self, paper_id: str, limit: int = 5) -> list[str]:
+        headers = {}
+        if self.api_key:
+            headers["x-api-key"] = self.api_key
+
+        params = {
+            "limit": limit,
+            "fields": "citingPaper.paperId,citingPaper.url",
+        }
+
+        response = requests.get(
+            f"{self.base_url}/paper/{paper_id}/citations",
+            params=params,
+            headers=headers,
+        )
+        response.raise_for_status()
+
+        data = response.json()
+
+        citations: list[str] = []
+        for item in data.get("data", []):
+            paper = item.get("citingPaper", {})
+            url = paper.get("url") or paper.get("paperId")
+            if url:
+                citations.append(url)
+
+        return citations
