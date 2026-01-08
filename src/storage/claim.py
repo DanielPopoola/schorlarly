@@ -4,9 +4,9 @@ from pathlib import Path
 
 import faiss
 import numpy as np
-from dacite import from_dict
+from dacite import Config, from_dict
 
-from src.models import Claim
+from src.models import Claim, EvidenceType
 
 from .embedding import EmbeddingProvider
 from .helpers import EnumEncoder
@@ -97,10 +97,12 @@ class ClaimStore:
 			self._claims_cache = {}
 			return {}
 
+		config = Config(cast=[EvidenceType])
+
 		with open(self.claims_file) as f:
 			data = json.load(f)
 			self._claims_cache = {
-				cid: from_dict(data_class=Claim, data=c_dict) for cid, c_dict in data.items()
+				cid: from_dict(data_class=Claim, data=c_dict, config=config) for cid, c_dict in data.items()
 			}
 
 		return self._claims_cache

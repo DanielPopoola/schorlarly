@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
 
+import requests
 from google.genai import types
 
 
@@ -42,17 +43,26 @@ class SentenceTransformerEmbeddings(EmbeddingProvider):
 
 
 class HuggingFaceEmbeddings(EmbeddingProvider):
-	def __init__(self, api_token: str, model: str = 'sentence-transformers/all-MiniLM-L6-v2'):
+	def __init__(self, api_token: str, model: str = 'sentence-transformers/all-mpnet-base-v2'):
 		self.api_token = api_token
-		self.model = model
-		self.api_url = f'https://api-inference.huggingface.co/models/{model}'
+		self.model_id = model.replace('huggingface/', '')
+		self.api_url = 'https://router.huggingface.co/hf-inference/v1/embeddings'
 
 	def encode(self, text: str) -> list[float]:
-		import requests
+		headers = {'Authorization': f'Bearer {self.api_token}', 'Content-Type': 'application/json'}
+		data = {
+			'model': self.model_id,
+			'inputs': text,
+		}
 
-		headers = {'Authorization': f'Bearer {self.api_token}'}
-		response = requests.post(self.api_url, headers=headers, json={'inputs': text})
-		return response.json()
+		response = requests.post(self.api_url, headers=headers, json=data)
+		if response.status_code != 200:
+			raise Exception(f'HF API Error {response.status_code}: {response.text}')
+
+		result = response.json()
+		if 'embedding' in result:
+			return result['embedding']
+		raise Exception(f'Unexpected HF response: {result}')
 
 	def dimension(self) -> int:
 		return 384

@@ -1,3 +1,4 @@
+import time
 from pathlib import Path
 
 import arxiv
@@ -16,10 +17,10 @@ class ArxivSearch:
 	def search(self, query: str, max_results: int = 10) -> list[SearchResult]:
 		logger.info(f"Searching arXiv for: '{query}' (max {max_results} results)")
 
-		client = arxiv.Client()
-		search = arxiv.Search(
-			query=query, max_results=max_results, sort_by=arxiv.SortCriterion.Relevance
-		)
+		time.sleep(3)
+
+		client = arxiv.Client(delay_seconds=3, num_retries=3)
+		search = arxiv.Search(query=query, max_results=max_results, sort_by=arxiv.SortCriterion.Relevance)
 
 		results: list[SearchResult] = []
 

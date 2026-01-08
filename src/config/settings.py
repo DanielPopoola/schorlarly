@@ -45,7 +45,7 @@ class Settings(BaseSettings):
 	OUTPUT_DIR: Path = DATA_DIR / 'outputs'
 
 	# LLM Models
-	EMBEDDING_MODEL: str = 'sentence-transformers/all-MiniLM-L6-v2'
+	EMBEDDING_MODEL: str = 'gemini-embedding-001'
 	RESEARCH_MODEL: str = 'llama-3.1-sonar-large-128k-online'
 	WRITING_MODEL: str = 'claude-3-5-sonnet-20241022'
 
@@ -53,14 +53,27 @@ class Settings(BaseSettings):
 
 
 def get_embedding_provider() -> EmbeddingProvider:
-	if settings.OPENAI_API_KEY and 'openai' in settings.EMBEDDING_MODEL.lower():
+	model_name_lower = settings.EMBEDDING_MODEL.lower()
+
+	if settings.OPENAI_API_KEY and 'openai' in model_name_lower:
 		return OpenAIEmbeddings(settings.OPENAI_API_KEY)
-	elif settings.GEMINI_API_KEY and 'gemini' in settings.EMBEDDING_MODEL.lower():
+
+	if settings.GEMINI_API_KEY and 'gemini' in model_name_lower:
 		return GeminiEmbeddings(settings.GEMINI_API_KEY)
-	elif settings.ANTHROPIC_API_KEY and 'huggingface' in settings.EMBEDDING_MODEL.lower():
-		return HuggingFaceEmbeddings(settings.HUGGINGFACE_API_TOKEN)
-	else:
+
+	if settings.HUGGINGFACE_API_TOKEN or 'huggingface/' in model_name_lower:
+		if not settings.HUGGINGFACE_API_TOKEN:
+			raise ValueError('HUGGINGFACE_API_TOKEN is required for this model.')
+		return HuggingFaceEmbeddings(settings.HUGGINGFACE_API_TOKEN, settings.EMBEDDING_MODEL)
+
+	try:
 		return SentenceTransformerEmbeddings(settings.EMBEDDING_MODEL)
+	except (ImportError, ModuleNotFoundError) as e:
+		raise RuntimeError(
+			f'Could not initialize embedding provider for {settings.EMBEDDING_MODEL}. '
+			'To use local embeddings, pip install sentence-transformers. '
+			'To use cloud embeddings, set HUGGINGFACE_API_TOKEN in your .env.'
+		) from e
 
 
 settings = Settings()
