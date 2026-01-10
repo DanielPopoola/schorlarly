@@ -61,6 +61,8 @@ GEMINI.md
 BaseImplementationPlan.md
 UpdatedImplementationPlan.md
 logs/
+
+sources/
 # Django stuff:
 *.log
 local_settings.py

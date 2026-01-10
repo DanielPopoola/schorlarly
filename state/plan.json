@@ -1,43 +1,33 @@
 {
-  "topic": "Impact of microplastics on marine biodiversity in coastal ecosystems",
+  "topic": "transformer neural networks",
   "sections": [
     {
       "id": 0,
       "title": "Introduction",
       "objective": "Introduce the topic, provide background, and state research objectives",
-      "status": "pending"
+      "status": "pending",
+      "source_ids": [
+        "arxiv:2306.14753",
+        "arxiv:2307.05639",
+        "arxiv:1901.06610",
+        "arxiv:1905.05918",
+        "arxiv:1906.10015"
+      ]
     },
     {
       "id": 1,
-      "title": "Literature Review",
-      "objective": "Review existing research and identify gaps",
-      "status": "pending"
-    },
-    {
-      "id": 2,
-      "title": "Research Methodology",
+      "title": "Methodology",
       "objective": "Describe research methods and approach",
-      "status": "pending"
-    },
-    {
-      "id": 3,
-      "title": "Key Findings",
-      "objective": "Present research findings and analysis",
-      "status": "pending"
-    },
-    {
-      "id": 4,
-      "title": "Discussion",
-      "objective": "Interpret findings and discuss implications",
-      "status": "pending"
-    },
-    {
-      "id": 5,
-      "title": "Conclusion and Recommendations",
-      "objective": "Summarize findings and suggest future work",
-      "status": "pending"
+      "status": "pending",
+      "source_ids": [
+        "arxiv:2306.14753",
+        "arxiv:2307.05639",
+        "arxiv:1905.05918",
+        "arxiv:1901.06610",
+        "arxiv:1906.10015"
+      ]
     }
   ],
-  "total_sections": 6,
-  "created_at": "2026-01-10T10:36:07.550858+00:00"
+  "total_sections": 2,
+  "created_at": "2026-01-10T11:22:40.190922+00:00"
 }

@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Any
 
 from agents.input_validator import InputValidator
+from agents.research_agent import ResearchAgent
 from utils.logger import logger
 
 
@@ -16,6 +17,11 @@ class Orchestrator:
 		self.plan_file = self.state_dir / 'plan.json'
 
 		self.validator = InputValidator()
+
+		self.research_agent = ResearchAgent(
+			storage_dir=self.state_dir / 'sources',
+			max_papers_per_section=5,
+		)
 
 	def initialize(self, input_data: dict[str, Any]) -> None:
 		logger.info('Initializing orchestrator...')
@@ -49,19 +55,34 @@ class Orchestrator:
 		for section in plan['sections']:
 			section_id = section['id']
 			section_title = section['title']
+			section_objective = section['objective']
 
 			if section_id in state['completed_sections']:
 				logger.info(f'[Section {section_id}] {section_title} - ALREADY COMPLETED')
 				continue
 
 			logger.info(f'\n[Section {section_id}] Processing: {section_title}')
-
-			logger.info(f"  TODO: Research sources for '{section_title}'")
-			logger.info('  TODO: Write section content')
-			logger.info('  TODO: Validate citations')
-			logger.info('  → This section will be implemented in Phase 2-4')
-
 			state['current_section_id'] = section_id
+			self._save_state(state)
+
+			logger.info('  Step 1: Researching sources...')
+			source_ids = self.research_agent.research_section(
+				topic=state['config']['topic'],
+				section_title=section_title,
+				section_objective=section_objective,
+			)
+			logger.info(f'  ✓ Found {len(source_ids)} sources')
+
+			section['source_ids'] = source_ids
+			self._save_plan(plan)
+
+			logger.info('  Step 2: Writing section content...')
+			logger.info('  → TODO: Will be implemented in Phase 3')
+
+			logger.info('  Step 3: Validating citations...')
+			logger.info('  → TODO: Will be implemented in Phase 4')
+
+			state['completed_sections'].append(section_id)
 			self._save_state(state)
 
 		logger.info(f'\n{"=" * 60}')
@@ -71,13 +92,12 @@ class Orchestrator:
 		logger.info(f'{"=" * 60}\n')
 
 	def _create_initial_state(self, config: dict) -> dict:
-		"""Create the initial state object."""
 		return {
 			'config': config,
 			'current_section_id': 0,
 			'completed_sections': [],
 			'failed_sections': [],
-			'thesis': None,
+			'thesis': None,  # Set after research phase
 			'created_at': datetime.now(UTC).isoformat(),
 			'updated_at': datetime.now(UTC).isoformat(),
 		}
@@ -121,23 +141,28 @@ class Orchestrator:
 			return f'Address the requirements of the {title} section'
 
 	def _save_state(self, state: dict) -> None:
+		"""Save state to disk."""
 		state['updated_at'] = datetime.now(UTC).isoformat()
 		with open(self.state_file, 'w') as f:
 			json.dump(state, f, indent=2)
 
 	def _load_state(self) -> dict:
+		"""Load state from disk."""
 		with open(self.state_file) as f:
 			return json.load(f)
 
 	def _save_plan(self, plan: dict) -> None:
+		"""Save plan to disk."""
 		with open(self.plan_file, 'w') as f:
 			json.dump(plan, f, indent=2)
 
 	def _load_plan(self) -> dict:
+		"""Load plan from disk."""
 		with open(self.plan_file) as f:
 			return json.load(f)
 
 	def _log_plan(self, plan: dict) -> None:
+		"""Pretty-print the execution plan."""
 		logger.info(f'\n{"=" * 60}')
 		logger.info('EXECUTION PLAN')
 		logger.info(f'{"=" * 60}')
@@ -150,27 +175,3 @@ class Orchestrator:
 			logger.info(f'    Status: {section["status"]}\n')
 
 		logger.info(f'{"=" * 60}\n')
-
-
-# Example usage
-if __name__ == '__main__':
-	# Example input
-	input_data = {
-		'topic': 'Impact of microplastics on marine biodiversity',
-		'template': [
-			'Introduction',
-			'Literature Review',
-			'Methodology',
-			'Findings',
-			'Discussion',
-			'Conclusion',
-		],
-		'style': {
-			'tone': 'formal',
-			'citation_format': 'Harvard',
-		},
-	}
-
-	orchestrator = Orchestrator(state_dir='state')
-	orchestrator.initialize(input_data)
-	orchestrator.run()
