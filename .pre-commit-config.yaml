@@ -10,14 +10,14 @@ repos:
 
       - id: ruff-check
         name: ruff check
-        entry: uv run ruff check --fix src/
+        entry: uv run ruff check --fix .
         language: system
         types: [python]
         pass_filenames: false 
 
       - id: type-check
         name: type check
-        entry: uv run ty check src/
+        entry: uv run ty check .
         language: system
         types: [python]
         pass_filenames: false

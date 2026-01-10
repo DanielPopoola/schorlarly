@@ -1,0 +1,43 @@
+{
+  "topic": "Impact of microplastics on marine biodiversity in coastal ecosystems",
+  "sections": [
+    {
+      "id": 0,
+      "title": "Introduction",
+      "objective": "Introduce the topic, provide background, and state research objectives",
+      "status": "pending"
+    },
+    {
+      "id": 1,
+      "title": "Literature Review",
+      "objective": "Review existing research and identify gaps",
+      "status": "pending"
+    },
+    {
+      "id": 2,
+      "title": "Research Methodology",
+      "objective": "Describe research methods and approach",
+      "status": "pending"
+    },
+    {
+      "id": 3,
+      "title": "Key Findings",
+      "objective": "Present research findings and analysis",
+      "status": "pending"
+    },
+    {
+      "id": 4,
+      "title": "Discussion",
+      "objective": "Interpret findings and discuss implications",
+      "status": "pending"
+    },
+    {
+      "id": 5,
+      "title": "Conclusion and Recommendations",
+      "objective": "Summarize findings and suggest future work",
+      "status": "pending"
+    }
+  ],
+  "total_sections": 6,
+  "created_at": "2026-01-10T10:36:07.550858+00:00"
+}

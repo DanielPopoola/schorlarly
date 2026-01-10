@@ -1,0 +1,22 @@
+{
+  "topic": "Impact of microplastics on marine biodiversity in coastal ecosystems",
+  "template": [
+    "Introduction",
+    "Literature Review",
+    "Research Methodology",
+    "Key Findings",
+    "Discussion",
+    "Conclusion and Recommendations"
+  ],
+  "constraints": {
+    "max_section_word_count": 2000,
+    "min_citations_per_section": 5,
+    "max_time_per_section_minutes": 20
+  },
+  "style": {
+    "tone": "formal",
+    "citation_format": "Harvard",
+    "complexity": "undergraduate",
+    "additional_instructions": "Emphasize environmental policy implications. Focus on recent studies (2020-2024)."
+  }
+}
