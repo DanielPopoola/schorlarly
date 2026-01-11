@@ -1,0 +1,10 @@
+{
+  "topic": "transformer architecture for natural language processing",
+  "template": [
+    "Introduction"
+  ],
+  "constraints": {
+    "max_section_word_count": 1500,
+    "min_citations_per_section": 3
+  }
+}

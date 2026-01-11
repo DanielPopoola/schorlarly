@@ -1,9 +1,13 @@
+import os
 import time
 from pathlib import Path
 from typing import Any
 
+from agents.arxiv_provider import ArxivProvider
+from agents.perplexity_provider import PerplexityProvider
+from agents.search_provider import SearchProvider
 from models import SearchResult
-from search import ArxivSearch, PaperDeduplicator
+from search import PaperDeduplicator
 from utils.logger import logger
 
 
@@ -20,11 +24,29 @@ class ResearchAgent:
 		self.max_papers = max_papers_per_section
 		self.timeout_seconds = search_timeout_minutes * 60
 
-		self.arxiv_search = ArxivSearch(download_dir=self.storage_dir / 'pdfs')
+		self.providers = self._initialize_providers()
 
 		self.deduplicator = PaperDeduplicator()
 
 		self.sources_db: dict[str, dict[str, Any]] = {}
+
+	def _initialize_providers(self) -> list[SearchProvider]:
+		providers = []
+
+		perplexity_key = os.getenv('PERPLEXITY_API_KEY')
+		if perplexity_key:
+			try:
+				provider = PerplexityProvider(perplexity_key)
+				providers.append(provider)
+			except Exception as e:
+				logger.warning(f'Failed to initialize Perplexity: {e}')
+		else:
+			logger.info('Perplexity API key not found, using arXiv only')
+
+		arxiv_provider = ArxivProvider(download_dir=self.storage_dir / 'pdfs')
+		providers.append(arxiv_provider)
+
+		return providers
 
 	def research_section(
 		self,
@@ -39,13 +61,24 @@ class ResearchAgent:
 		start_time = time.time()
 
 		query = self._build_search_query(topic, section_title, section_objective)
-		logger.info(f'Search query: {query}')
 
-		try:
-			raw_results = self.arxiv_search.search(query, max_results=self.max_papers)
-			logger.info(f'Found {len(raw_results)} papers from arXiv')
-		except Exception as e:
-			logger.error(f'arXiv search failed: {e}')
+		raw_results = []
+		for provider in self.providers:
+			logger.info(f'Trying {provider.get_name()}...')
+
+			try:
+				results = provider.search(query, max_results=self.max_papers)
+				if results:
+					raw_results = results
+					break  # Stop if we got results
+				else:
+					logger.info(f'{provider.get_name()} returned no results')
+			except Exception as e:
+				logger.warning(f'{provider.get_name()} failed: {e}')
+				continue
+
+		if not raw_results:
+			logger.error('All search providers failed!')
 			return []
 
 		elapsed = time.time() - start_time
@@ -85,15 +118,6 @@ class ResearchAgent:
 		section_title: str,
 		section_objective: str,
 	) -> str:
-		"""
-		Build a search query for arXiv.
-
-		Strategy (simple for Phase 2):
-		- Use topic as base
-		- Add section-specific keywords if relevant
-
-		In later phases: Could use LLM to generate better queries
-		"""
 		query_parts = [topic]
 
 		section_lower = section_title.lower()
@@ -139,6 +163,7 @@ class ResearchAgent:
 		if source_id in self.sources_db:
 			return source_id
 
+		# Store metadata
 		self.sources_db[source_id] = {
 			'source_id': source_id,
 			'title': result.title,
@@ -158,7 +183,6 @@ class ResearchAgent:
 		return self.sources_db.get(source_id)
 
 	def get_all_sources(self) -> dict[str, dict[str, Any]]:
-		"""Get all stored sources."""
 		return self.sources_db.copy()
 
 

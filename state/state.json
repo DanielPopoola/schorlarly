@@ -1,9 +1,8 @@
 {
   "config": {
-    "topic": "transformer neural networks",
+    "topic": "transformer architecture for natural language processing",
     "template": [
-      "Introduction",
-      "Methodology"
+      "Introduction"
     ],
     "constraints": {
       "max_section_word_count": 1500,
@@ -17,13 +16,12 @@
       "additional_instructions": null
     }
   },
-  "current_section_id": 1,
+  "current_section_id": 0,
   "completed_sections": [
-    0,
-    1
+    0
   ],
   "failed_sections": [],
   "thesis": null,
-  "created_at": "2026-01-10T11:22:40.189282+00:00",
-  "updated_at": "2026-01-10T11:23:09.067275+00:00"
+  "created_at": "2026-01-11T21:59:33.970901+00:00",
+  "updated_at": "2026-01-11T21:59:51.455586+00:00"
 }

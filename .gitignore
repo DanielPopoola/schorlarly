@@ -62,6 +62,7 @@ BaseImplementationPlan.md
 UpdatedImplementationPlan.md
 logs/
 
+state/
 sources/
 # Django stuff:
 *.log
