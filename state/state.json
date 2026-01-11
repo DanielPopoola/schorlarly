@@ -1,27 +1,37 @@
 {
   "config": {
-    "topic": "transformer architecture for natural language processing",
+    "topic": "Impact of microplastics on marine biodiversity in coastal ecosystems",
     "template": [
-      "Introduction"
+      "Introduction",
+      "Literature Review",
+      "Research Methodology",
+      "Key Findings",
+      "Discussion",
+      "Conclusion and Recommendations"
     ],
     "constraints": {
-      "max_section_word_count": 1500,
-      "min_citations_per_section": 3,
+      "max_section_word_count": 2000,
+      "min_citations_per_section": 5,
       "max_time_per_section_minutes": 20
     },
     "style": {
-      "tone": "professional",
-      "citation_format": "APA",
+      "tone": "formal",
+      "citation_format": "Harvard",
       "complexity": "undergraduate",
-      "additional_instructions": null
+      "additional_instructions": "Emphasize environmental policy implications. Focus on recent studies (2020-2024)."
     }
   },
-  "current_section_id": 0,
+  "current_section_id": 5,
   "completed_sections": [
-    0
+    0,
+    1,
+    2,
+    3,
+    4,
+    5
   ],
   "failed_sections": [],
   "thesis": null,
-  "created_at": "2026-01-11T21:59:33.970901+00:00",
-  "updated_at": "2026-01-11T21:59:51.455586+00:00"
+  "created_at": "2026-01-11T22:55:04.831544+00:00",
+  "updated_at": "2026-01-11T22:58:24.441518+00:00"
 }
