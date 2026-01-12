@@ -1,0 +1,19 @@
+{
+  "topic": "Multi-Modal Graph RAG for Enterprise Knowledge Synthesis",
+  "template": [
+    "Introduction",
+    "Background to the Study",
+    "Statement of the Problem",
+    "Literature Review",
+    "System Analysis",
+    "System Design",
+    "System Implementation",
+    "Conclusion"
+  ],
+  "style": {
+    "tone": "formal",
+    "citation_format": "Harvard",
+    "complexity": "undergraduate",
+    "additional_instructions": "Emphasize environmental policy implications. Focus on recent studies (2020-2024)."
+  }
+}

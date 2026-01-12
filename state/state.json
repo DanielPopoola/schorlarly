@@ -1,17 +1,19 @@
 {
   "config": {
-    "topic": "Impact of microplastics on marine biodiversity in coastal ecosystems",
+    "topic": "Multi-Modal Graph RAG for Enterprise Knowledge Synthesis",
     "template": [
       "Introduction",
+      "Background to the Study",
+      "Statement of the Problem",
       "Literature Review",
-      "Research Methodology",
-      "Key Findings",
-      "Discussion",
-      "Conclusion and Recommendations"
+      "System Analysis",
+      "System Design",
+      "System Implementation",
+      "Conclusion"
     ],
     "constraints": {
-      "max_section_word_count": 2000,
-      "min_citations_per_section": 5,
+      "max_section_word_count": 1500,
+      "min_citations_per_section": 3,
       "max_time_per_section_minutes": 20
     },
     "style": {
@@ -21,17 +23,11 @@
       "additional_instructions": "Emphasize environmental policy implications. Focus on recent studies (2020-2024)."
     }
   },
-  "current_section_id": 5,
-  "completed_sections": [
-    0,
-    1,
-    2,
-    3,
-    4,
-    5
-  ],
+  "profile_name": "cs_project",
+  "current_section_id": 0,
+  "completed_sections": [],
   "failed_sections": [],
-  "thesis": null,
-  "created_at": "2026-01-11T22:55:04.831544+00:00",
-  "updated_at": "2026-01-11T22:58:24.441518+00:00"
+  "research_complete": true,
+  "created_at": "2026-01-12T14:09:14.026349+00:00",
+  "updated_at": "2026-01-12T14:10:04.876158+00:00"
 }

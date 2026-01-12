@@ -35,3 +35,4 @@ class ValidationResult:
 	issues: list[ValidationIssue]
 	attempt: int
 	timestamp: str
+	missing_topics: list
