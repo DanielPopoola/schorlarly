@@ -13,7 +13,7 @@ from agents.validation_agent import CitationValidator
 from agents.writing_agent import WritingAgent
 from config.settings import settings
 from models import Finding, Severity
-from models.template_profile import SectionProfile, SectionType, TemplateProfileManager
+from models.template_profile import ProfileManager, Section, SectionType
 from utils.llm_client import UnifiedLLMClient
 from utils.logger import logger
 
@@ -40,7 +40,7 @@ class Orchestrator:
 			app_name='Scholarly',
 		)
 		self.context_manager = ContextManager(self.llm_client)
-		self.profile_manager = TemplateProfileManager()
+		self.profile_manager = ProfileManager()
 		self.current_profile = None
 
 	def initialize(self, input_data: dict[str, Any]) -> None:
@@ -48,7 +48,7 @@ class Orchestrator:
 		config = self.validator.validate(input_data)
 		logger.info(f'✓ Input validated. Topic: {config["topic"][:50]}...')
 
-		self.current_profile = self.profile_manager.detect_profile(template=config['template'], topic=config['topic'])
+		self.current_profile = self.profile_manager.detect(config['template'])
 		logger.info(f'✓ Detected template profile: {self.current_profile.name}')
 
 		state = {
@@ -66,7 +66,7 @@ class Orchestrator:
 
 		sections = []
 		for idx, title in enumerate(config['template']):
-			section_profile = self.current_profile.get_section_profile(title)
+			section_profile = self.current_profile.get_section(title)
 
 			sections.append(
 				{
@@ -78,7 +78,7 @@ class Orchestrator:
 					'citations_count': 0,
 					'min_citations': section_profile.min_citations,
 					'max_words': section_profile.max_word_count,
-					'section_type': section_profile.section_type.value,
+					'section_type': section_profile.type.value,
 					'requires_code': section_profile.requires_code,
 					'requires_diagrams': section_profile.requires_diagrams,
 					'research_strategy': section_profile.research_strategy,
@@ -180,7 +180,7 @@ class Orchestrator:
 
 		return WritingAgent(llm_client=llm_client)
 
-	def _generate_objective(self, title: str, profile: SectionProfile) -> str:
+	def _generate_objective(self, title: str, profile: Section) -> str:
 		"""Generate objectives tailored to section type"""
 
 		objectives = {
@@ -195,7 +195,7 @@ class Orchestrator:
 				'conclusion': 'Synthesize findings and state final conclusions',
 				'recommendations': 'Provide actionable recommendations based on findings',
 			},
-			SectionType.RESEARCH_LITERATURE: {
+			SectionType.LITERATURE: {
 				'literature': 'Review and synthesize existing research, identify gaps',
 				'existing': 'Analyze existing approaches and their limitations',
 				'efforts': 'Evaluate prior attempts to address the problem',
@@ -204,7 +204,7 @@ class Orchestrator:
 				'methodology': 'Describe research methods, procedures, and justification',
 				'approach': 'Detail the specific approach and rationale',
 			},
-			SectionType.TECHNICAL_ANALYSIS: {
+			SectionType.TECHNICAL: {
 				'analysis': 'Analyze system requirements and constraints',
 				'design': 'Present system architecture and design decisions',
 				'flowchart': 'Illustrate process flows and system logic',
@@ -223,7 +223,7 @@ class Orchestrator:
 		}
 
 		title_lower = title.lower()
-		section_objectives = objectives.get(profile.section_type, {})
+		section_objectives = objectives.get(profile.type, {})
 
 		for keyword, objective in section_objectives.items():
 			if keyword in title_lower:
