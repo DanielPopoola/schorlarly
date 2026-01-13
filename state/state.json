@@ -1,6 +1,6 @@
 {
   "config": {
-    "topic": "Impact of microplastics on marine biodiversity in coastal ecosystems",
+    "topic": "The Economic Impact of Remote Work on Firm Productivity: Evidence from the COVID-19 Period",
     "template": [
       "Introduction",
       "Background to the Study",
@@ -31,6 +31,13 @@
       "Conclusion",
       "Recommendations"
     ],
+    "project_type": "review",
+    "artifacts": [
+      {
+        "type": "survey_instrument",
+        "description": "A structured questionnaire designed to collect data on employee productivity and remote work experiences during the COVID-19 pandemic."
+      }
+    ],
     "constraints": {
       "max_section_word_count": 2000,
       "min_citations_per_section": 5,
@@ -44,10 +51,47 @@
     }
   },
   "profile_name": "management",
+  "project_type": "review",
+  "artifacts": [
+    {
+      "type": "survey_instrument",
+      "description": "A structured questionnaire designed to collect data on employee productivity and remote work experiences during the COVID-19 pandemic."
+    }
+  ],
   "current_section_id": 0,
   "completed_sections": [],
   "failed_sections": [],
   "research_complete": true,
-  "created_at": "2026-01-13T11:01:39.231457+00:00",
-  "updated_at": "2026-01-13T11:04:02.264967+00:00"
+  "created_at": "2026-01-13T12:55:15.292302+00:00",
+  "updated_at": "2026-01-13T12:56:44.348199+00:00",
+  "global_outline": {
+    "Introduction": "Standard academic coverage",
+    "Background to the Study": "Standard academic coverage",
+    "Statement of the Problem": "Standard academic coverage",
+    "Objective of the Study": "Standard academic coverage",
+    "Significance of the Study": "Standard academic coverage",
+    "Scope of the Study": "Standard academic coverage",
+    "Limitations": "Standard academic coverage",
+    "Organization of the Study": "Standard academic coverage",
+    "Definition of Terms": "Standard academic coverage",
+    "Conceptual Framework": "Standard academic coverage",
+    "Theoretical Framework": "Standard academic coverage",
+    "Empirical Studies Review": "Standard academic coverage",
+    "Appraisal": "Standard academic coverage",
+    "Research Design": "Standard academic coverage",
+    "Population of the Study": "Standard academic coverage",
+    "Sample and Sampling Techniques": "Standard academic coverage",
+    "Instrument for Data Collection": "Standard academic coverage",
+    "Validity of the Instrument": "Standard academic coverage",
+    "Reliability of the Instrument": "Standard academic coverage",
+    "Procedure for Data Collection": "Standard academic coverage",
+    "Method of Data Analysis": "Standard academic coverage",
+    "Answers to Research Questions": "Standard academic coverage",
+    "Testing of Hypotheses": "Standard academic coverage",
+    "Summary of the Findings": "Standard academic coverage",
+    "Discussion of the Findings": "Standard academic coverage",
+    "Implications of the Study": "Standard academic coverage",
+    "Conclusion": "Standard academic coverage",
+    "Recommendations": "Standard academic coverage"
+  }
 }

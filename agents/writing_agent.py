@@ -1,3 +1,4 @@
+import re
 import time
 from typing import Any
 
@@ -18,6 +19,9 @@ class WritingAgent:
 		section_title: str,
 		section_objective: str,
 		topic: str,
+		project_type: str,
+		artifacts: list[dict],
+		guidance: str,
 		available_sources: list[dict[str, Any]],
 		style_preferences: dict[str, Any],
 		constraints: dict[str, Any],
@@ -34,6 +38,9 @@ class WritingAgent:
 			section_title=section_title,
 			section_objective=section_objective,
 			topic=topic,
+			project_type=project_type,
+			artifacts=artifacts,
+			guidance=guidance,
 			available_sources=available_sources,
 			style_preferences=style_preferences,
 			constraints=constraints,
@@ -42,6 +49,7 @@ class WritingAgent:
 
 		try:
 			content = self._generate_content(prompt, constraints)
+			content = self._adjust_claims_for_project_type(content, project_type)
 		except Exception as e:
 			logger.error(f'Content generation failed: {e}')
 			raise
@@ -64,11 +72,37 @@ class WritingAgent:
 			'generation_time': elapsed,
 		}
 
+	def _adjust_claims_for_project_type(self, content: str, project_type: str) -> str:
+		"""Downgrade false claims based on project type for proposals."""
+		if project_type == 'proposal':
+			replacements = {
+				'we conducted': 'we will conduct',
+				'we collected': 'we will collect',
+				'we analyzed': 'we will analyze',
+				'results show': 'expected results will show',
+				'we found': 'we expect to find',
+				'our experiment': 'our proposed experiment',
+				'this study demonstrated': 'this proposed study will demonstrate',
+				'the system performs': 'the proposed system will perform',
+				'we implemented': 'we will implement',
+			}
+
+			for old, new in replacements.items():
+				# Use regex for whole word matching to avoid partial replacements
+				content = re.sub(r'\b' + re.escape(old) + r'\b', new, content, flags=re.IGNORECASE)
+
+			logger.info(f'  Claims adjusted for {project_type} project type.')
+
+		return content
+
 	def _build_writing_prompt(
 		self,
 		section_title: str,
 		section_objective: str,
 		topic: str,
+		project_type: str,
+		artifacts: list[dict],
+		guidance: str,
 		available_sources: list[dict[str, Any]],
 		style_preferences: dict[str, Any],
 		constraints: dict[str, Any],
@@ -86,6 +120,52 @@ class WritingAgent:
 			Abstract: {source['abstract'][:300]}...
 
 			"""
+
+		artifacts_text = ''
+		if artifacts:
+			artifacts_text = '# PROJECT ARTIFACTS (YOUR ORIGINAL WORK)\n'
+			for a in artifacts:
+				artifacts_text += f'- {a["type"]}: {a["description"]}\n'
+		else:
+			artifacts_text = '# NO ORIGINAL ARTIFACTS PROVIDED\n'
+
+		epistemic_constraints = ''
+		if project_type == 'review':
+			epistemic_constraints = """
+# CRITICAL EPISTEMIC CONSTRAINTS (PROJECT TYPE: REVIEW)
+1. You are writing a SYSTEMATIC REVIEW.
+2. DO NOT claim to have performed any original experiments, measurements, or software development.
+3. FORBIDDEN phrases: "I measured", "We developed", "Our system", "In our study".
+4. REQUIRED phrases: "The literature indicates", "Previous studies by [Source] suggest", 
+"A synthesis of existing work reveals".
+5. If a claim isn't in the provided SOURCES, you cannot state it as a primary finding of this paper.
+"""
+		elif project_type == 'proposal':
+			epistemic_constraints = """
+# CRITICAL EPISTEMIC CONSTRAINTS (PROJECT TYPE: PROPOSAL)
+1. You are writing a RESEARCH PROPOSAL for future work.
+2. Use FUTURE TENSE for all methodology and expected results ("We will measure", 
+"The proposed system will").
+3. DO NOT claim that results have already been obtained.
+"""
+		elif project_type in ['empirical', 'computational']:
+			if not artifacts:
+				epistemic_constraints = f"""
+# CRITICAL EPISTEMIC CONSTRAINTS (PROJECT TYPE: {project_type.upper()} BUT NO ARTIFACTS)
+1. WARNING: This project is categorized as {project_type}, but no original artifacts were provided.
+2. YOU MUST DOWNGRADE your claims. Instead of reporting results, focus on "Proposed Methodology"
+ or "Theoretical Framework".
+3. DO NOT hallucinate specific data points or code features that haven't been provided in the 
+ARTIFACTS section.
+4. If you must discuss results, label them as "EXPECTED OUTCOMES" or "SIMULATED SCENARIOS".
+"""
+			else:
+				epistemic_constraints = f"""
+# CRITICAL EPISTEMIC CONSTRAINTS (PROJECT TYPE: {project_type.upper()})
+1. You may report findings based ONLY on the provided ARTIFACTS.
+2. Be precise about what YOU did vs what the SOURCES report.
+"""
+
 		style_text = self._format_style_instructions(style_preferences)
 
 		target_words = constraints.get('max_section_word_count', 1500)
@@ -135,8 +215,16 @@ class WritingAgent:
 
 # PAPER CONTEXT
 Topic: {topic}
+Project Type: {project_type}
 Section: {section_title}
 Objective: {section_objective}
+
+# GLOBAL GUIDANCE FOR THIS SECTION
+{guidance}
+
+{epistemic_constraints}
+
+{artifacts_text}
 
 # YOUR TASK
 Write {target_words} words (±20% acceptable) with at least {min_citations} citations.
@@ -156,6 +244,10 @@ Write {target_words} words (±20% acceptable) with at least {min_citations} cita
 
 # STYLE
 {style_text}
+
+# CRITICAL HYGIENE
+- NEVER mention that you are an AI or that this was "Generated by Scholarly".
+- DO NOT include internal metadata or future timestamps.
 
 # OUTPUT FORMAT
 Write in Markdown. Begin now:"""

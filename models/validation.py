@@ -10,6 +10,7 @@ class IssueType(Enum):
 	QUESTION_NOT_ANSWERED = 'question_not_answered'
 	STYLE_MISMATCH = 'style_mismatch'
 	TERMINOLOGY_INCONSISTENT = 'terminology_inconsistent'
+	UNEARNED_CLAIM = 'unearned_claim'
 
 
 class Severity(Enum):

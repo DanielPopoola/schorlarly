@@ -3,6 +3,7 @@ from datetime import datetime
 from typing import Any
 
 from models import IssueType, Severity, ValidationIssue, ValidationResult
+from models.project import Artifact, ArtifactType, ProjectType
 
 
 class CitationValidator:
@@ -11,11 +12,20 @@ class CitationValidator:
 		self.citation_pattern = r'\[(arxiv:\S+?|doi:\S+?)(?::\s*"[^"]*")?\]'
 
 	def validate_section(
-		self, section_id: int, content: str, min_citations: int = 3, max_words: int = 2000
+		self,
+		section_id: int,
+		content: str,
+		project_type: str,
+		artifacts: list[dict],
+		min_citations: int = 3,
+		max_words: int = 2000,
 	) -> ValidationResult:
 		issues = []
 
-		# Extract all citations
+		# 1. Check for unearned claims
+		issues.extend(self._check_unearned_claims(content, ProjectType(project_type), artifacts))
+
+		# 2. Extract all citations
 		citations = re.findall(self.citation_pattern, content)
 		unique_citations = set(citations)
 
@@ -71,6 +81,76 @@ class CitationValidator:
 			timestamp=datetime.now().isoformat(),
 			missing_topics=missing_topics if missing_sources else [],
 		)
+
+	def _check_unearned_claims(
+		self, content: str, project_type: ProjectType, artifacts: list[dict]
+	) -> list[ValidationIssue]:
+		issues = []
+
+		# Convert dict artifacts to Artifact objects for easier type checking
+		[Artifact(id='', type=ArtifactType(a['type']), description=a['description']) for a in artifacts]
+
+		speculative_phrases = [
+			'we conducted',
+			'we measured',
+			'we implemented',
+			'our results',
+			'data was collected',
+			'experiments showed',
+			'our system',
+		]
+
+		if project_type == ProjectType.REVIEW:
+			for phrase in speculative_phrases:
+				if re.search(r'\b' + re.escape(phrase) + r'\b', content, re.IGNORECASE):
+					issues.append(
+						ValidationIssue(
+							issue_type=IssueType.UNEARNED_CLAIM,
+							severity=Severity.CRITICAL,
+							message=f"Review project contains unearned claim: '{phrase}'",
+							suggestion='Rephrase to refer to existing literature, not original work.',
+							location=None,
+						)
+					)
+
+		elif project_type == ProjectType.PROPOSAL:
+			# For proposals, we allow future tense, but not past tense claims of execution
+			for phrase in speculative_phrases:
+				if re.search(r'\b' + re.escape(phrase) + r'\b', content, re.IGNORECASE) and not re.search(
+					r'will\s+' + re.escape(phrase.replace('we ', '')), content, re.IGNORECASE
+				):
+					issues.append(
+						ValidationIssue(
+							issue_type=IssueType.UNEARNED_CLAIM,
+							severity=Severity.CRITICAL,
+							message=f"Proposal contains past-tense claim of execution: '{phrase}'",
+							suggestion="Rephrase in future tense (e.g., 'we will conduct').",
+							location=None,
+						)
+					)
+
+		elif project_type in [ProjectType.EMPIRICAL, ProjectType.COMPUTATIONAL]:
+			if not artifacts:
+				# If no artifacts, all execution claims are unearned
+				for phrase in speculative_phrases:
+					if re.search(r'\b' + re.escape(phrase) + r'\b', content, re.IGNORECASE):
+						issues.append(
+							ValidationIssue(
+								issue_type=IssueType.UNEARNED_CLAIM,
+								severity=Severity.CRITICAL,
+								message=f"{project_type.value.capitalize()} project without artifacts contains \
+									unearned claim: '{phrase}'",
+								suggestion='Either provide artifacts or rephrase as proposal/review.',
+								location=None,
+							)
+						)
+			else:
+				# If artifacts exist, ensure claims refer to them or are grounded
+				# This is a more complex check, for now we will assume if artifacts exist, direct claims are acceptable.
+				# Further refinement could involve checking if specific artifact names are mentioned.
+				pass  # Future work: detailed artifact-claim linking
+
+		return issues
 
 	def _extract_topics_from_context(self, content: str, missing_citations: list[str]) -> list[str]:
 		"""Extract key terms around missing citations to identify research gaps"""

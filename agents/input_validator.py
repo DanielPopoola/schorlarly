@@ -7,6 +7,7 @@ from config.defaults import (
 	VALID_COMPLEXITY_LEVELS,
 	VALID_TONES,
 )
+from models.project import ArtifactType, ProjectType
 
 
 class ValidationError(Exception):
@@ -19,12 +20,16 @@ class InputValidator:
 
 		topic = self._validate_topic(raw_input['topic'])
 		template = self._validate_template(raw_input['template'])
+		project_type = self._validate_project_type(raw_input['project_type'])
+		artifacts = self._validate_artifacts(raw_input.get('artifacts', []))
 		constraints = self._validate_constraints(raw_input.get('constraints', {}))
 		style = self._validate_style(raw_input.get('style', {}))
 
 		return {
 			'topic': topic,
 			'template': template,
+			'project_type': project_type,
+			'artifacts': artifacts,
 			'constraints': constraints,
 			'style': style,
 		}
@@ -34,6 +39,32 @@ class InputValidator:
 			raise ValidationError("Missing required field: 'topic'")
 		if 'template' not in data:
 			raise ValidationError("Missing required field: 'template'")
+		if 'project_type' not in data:
+			raise ValidationError("Missing required field: 'project_type'")
+
+	def _validate_project_type(self, project_type: Any) -> str:
+		valid_types = [t.value for t in ProjectType]
+		if project_type not in valid_types:
+			raise ValidationError(f"Invalid project_type '{project_type}'. Must be one of: {', '.join(valid_types)}")
+		return project_type
+
+	def _validate_artifacts(self, artifacts: Any) -> list[dict]:
+		if not isinstance(artifacts, list):
+			raise ValidationError("'artifacts' must be a list")
+
+		valid_artifact_types = [t.value for t in ArtifactType]
+
+		for i, artifact in enumerate(artifacts):
+			if not isinstance(artifact, dict):
+				raise ValidationError(f'Artifact {i} must be a dictionary')
+			if 'type' not in artifact:
+				raise ValidationError(f"Artifact {i} missing 'type'")
+			if artifact['type'] not in valid_artifact_types:
+				raise ValidationError(f'Invalid type for artifact {i}: {artifact["type"]}')
+			if 'description' not in artifact:
+				raise ValidationError(f"Artifact {i} missing 'description'")
+
+		return artifacts
 
 	def _validate_topic(self, topic: Any) -> str:
 		if not isinstance(topic, str):

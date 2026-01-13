@@ -70,6 +70,8 @@ class Orchestrator:
 		state = {
 			'config': config,
 			'profile_name': self.current_profile.name,
+			'project_type': config['project_type'],
+			'artifacts': config.get('artifacts', []),
 			'current_section_id': 0,
 			'completed_sections': [],
 			'failed_sections': [],
@@ -80,15 +82,22 @@ class Orchestrator:
 		self._save_state(state)
 		logger.info(f'State initialized at {self.state_file}')
 
+		# Generate Global Outline before creating the plan
+		global_outline = self._generate_global_outline(config)
+		state['global_outline'] = global_outline
+		self._save_state(state)
+
 		sections = []
 		for idx, title in enumerate(config['template']):
 			section_profile = self.current_profile.get_section(title)
+			section_guidance = global_outline.get(title, '')
 
 			sections.append(
 				{
 					'id': idx,
 					'title': title,
 					'objective': self._generate_objective(title, section_profile),
+					'guidance': section_guidance,
 					'status': 'pending',
 					'word_count': 0,
 					'citations_count': 0,
@@ -126,7 +135,7 @@ class Orchestrator:
 			start_section = checkpoint['current_section_id']
 			logger.info(f'\n{"=" * 60}')
 			logger.info('RESUMING FROM CHECKPOINT')
-			logger.info(f'{"=" * 60}')
+			logger.info(f'{"=" * 60}\n')
 			logger.info(f'Completed: {checkpoint["completed_sections"]}')
 			logger.info(f'Resuming from: {start_section}')
 			logger.info(f'{"=" * 60}\n')
@@ -143,6 +152,12 @@ class Orchestrator:
 
 		# Process sections
 		for section in plan['sections'][start_section:]:
+			# NEW: Check if section is allowed
+			if not self._gate_section(section, state):
+				section['status'] = 'skipped'
+				self._save_plan(plan)  # Save plan with skipped status
+				continue
+
 			# Check for interruption
 			if self._interruption_requested:
 				logger.warning('\n  Interruption detected, saving...')
@@ -172,11 +187,32 @@ class Orchestrator:
 				if response.lower() != 'y':
 					sys.exit(1)
 
-		self._current_section_id = None
-
 		self.state_manager.clear_checkpoint()
 
 		logger.info('Paper generation complete!')
+
+		# NEW: Global coherence editing pass
+		logger.info(f'\n{"=" * 60}')
+		logger.info('PHASE 3: GLOBAL COHERENCE EDITING')
+		logger.info(f'{"=" * 60}\n')
+
+		from agents.editor_agent import EditorAgent
+
+		editor = EditorAgent(self.llm_client)
+
+		all_section_contents = []
+		for section in plan['sections']:
+			content = self._load_section_content(section['id'])
+			if content:
+				all_section_contents.append(content)
+
+		edited_contents = editor.remove_redundancy(all_section_contents)
+
+		# Save edited versions (Note: currently EditorAgent returns original, needs full implementation)
+		for i, section in enumerate(plan['sections']):
+			if i < len(edited_contents):
+				self._save_section_content(section['id'], section['title'], edited_contents[i])
+
 		self._export_paper(state, plan)
 
 	def _run_global_research(self, state: dict, plan: dict) -> None:
@@ -187,7 +223,7 @@ class Orchestrator:
 
 		source_ids = self.research_agent.research_section(
 			topic=state['config']['topic'],
-			section_title='全体',
+			section_title=state['config']['topic'],
 			section_objective='Comprehensive research for entire paper',
 		)
 
@@ -198,6 +234,34 @@ class Orchestrator:
 
 		logger.info(f'✓ Global research complete: {len(source_ids)} sources')
 		logger.info(f'{"=" * 60}\n')
+
+	def _gate_section(self, section: dict, state: dict) -> bool:
+		"""Returns False if section should be skipped"""
+		project_type = state['project_type']
+		section_title = section['title'].lower()
+
+		# Rule 1: Proposals cannot have Results
+		if project_type == 'proposal' and any(
+			keyword in section_title for keyword in ['result', 'finding', 'outcome', 'data analysis']
+		):
+			logger.warning(f"Skipping '{section['title']}' (proposal has no results)")
+			return False
+
+		# Rule 2: Reviews cannot have Methodology (for original work)
+		if project_type == 'review' and any(
+			keyword in section_title for keyword in ['methodology', 'experiment', 'procedure']
+		):
+			logger.warning(f"Skipping '{section['title']}' (review has no experiments)")
+			return False
+
+		# Rule 3: Empirical/Computational require artifacts for Results
+		if project_type in ['empirical', 'computational'] and 'result' in section_title:
+			has_artifacts = len(state.get('artifacts', [])) > 0
+			if not has_artifacts:
+				logger.error(f"Cannot write '{section['title']}'—no artifacts provided!")
+				return False
+
+		return True
 
 	def _save_checkpoint(self, current_section_id: int, state: dict, plan: dict) -> None:
 		completed = [s['id'] for s in plan['sections'] if s['status'] in ['validated', 'drafted']]
@@ -240,6 +304,53 @@ class Orchestrator:
 			self.context_manager.summaries.append(summary)
 
 		logger.info(f'✓ Restored {len(context_cache)} summaries from cache')
+
+	def _generate_global_outline(self, config: dict) -> dict[str, str]:
+		logger.info('Generating global outline for cohesive narrative...')
+
+		sections_list = '\n'.join([f'- {s}' for s in config['template']])
+		artifacts_text = '\n'.join([f'- {a["type"]}: {a["description"]}' for a in config.get('artifacts', [])])
+
+		prompt = f"""You are a senior academic editor. Create a detailed global outline for a research project.
+
+# TOPIC
+{config['topic']}
+
+# PROJECT TYPE
+{config['project_type']}
+(Empirical: user collected data; Computational: user wrote code; Review: literature synthesis only; 
+Proposal: future work)
+
+# AVAILABLE ARTIFACTS (EVIDENCE OF WORK DONE)
+{artifacts_text if artifacts_text else 'NONE - NO ORIGINAL WORK PERFORMED'}
+
+# SECTIONS TO COVER
+{sections_list}
+
+# TASK
+For each section, provide 2-3 sentences of specific guidance. 
+Ensure:
+1. No circular definitions (don't repeat problem statement in intro AND background).
+2. Epistemic Integrity: If PROJECT TYPE is 'Review' or 'Proposal', FORBID claims of ownership (e.g., no "we measured").
+3. Logical Flow: Each section must build on the previous one.
+4. Content Mapping: Assign specific sub-topics to specific sections so they don't overlap.
+
+# OUTPUT FORMAT
+JSON dictionary where keys are section titles and values are the guidance.
+Only output the JSON.
+"""
+		try:
+			response = self.llm_client.generate(prompt, max_tokens=2000)
+			# Strip markdown if any
+			if '```json' in response:
+				response = response.split('```json')[1].split('```')[0].strip()
+			elif '```' in response:
+				response = response.split('```')[1].split('```')[0].strip()
+
+			return json.loads(response)
+		except Exception as e:
+			logger.error(f'Global outline generation failed: {e}')
+			return {title: 'Standard academic coverage' for title in config['template']}
 
 	def _generate_objective(self, title: str, profile: Section) -> str:
 		objectives = {
@@ -413,6 +524,9 @@ Output only the refined objective (1-2 sentences)."""
 				section_title=section['title'],
 				section_objective=section['objective'],
 				topic=state['config']['topic'],
+				project_type=state['project_type'],
+				artifacts=state.get('artifacts', []),
+				guidance=section.get('guidance', ''),
 				available_sources=sources,
 				style_preferences=state['config']['style'],
 				constraints={
@@ -428,6 +542,8 @@ Output only the refined objective (1-2 sentences)."""
 			validation = validator.validate_section(
 				section_id=section_id,
 				content=result['content'],
+				project_type=state['project_type'],
+				artifacts=state.get('artifacts', []),
 				min_citations=config['min_citations'],
 				max_words=config['max_words'],
 			)

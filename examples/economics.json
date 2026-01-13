@@ -1,0 +1,51 @@
+{
+  "topic": "The Economic Impact of Remote Work on Firm Productivity: Evidence from the COVID-19 Period",
+  "template": [
+    "Introduction",
+    "Background to the Study",
+    "Statement of the Problem",
+    "Objective of the Study",
+    "Significance of the Study",
+    "Scope of the Study",
+    "Limitations",
+    "Organization of the Study",
+    "Definition of Terms",
+    "Conceptual Framework",
+    "Theoretical Framework",
+    "Empirical Studies Review",
+    "Appraisal",
+    "Research Design",
+	"Population of the Study",
+	"Sample and Sampling Techniques",
+	"Instrument for Data Collection",
+	"Validity of the Instrument",
+	"Reliability of the Instrument",
+	"Procedure for Data Collection",
+	"Method of Data Analysis",
+	"Answers to Research Questions",
+	"Testing of Hypotheses",
+    "Summary of the Findings",
+	"Discussion of the Findings",
+	"Implications of the Study",
+    "Conclusion",
+    "Recommendations"
+  ],
+  "project_type": "review",
+  "artifacts": [
+    {
+      "type": "survey_instrument",
+      "description": "A structured questionnaire designed to collect data on employee productivity and remote work experiences during the COVID-19 pandemic."
+    }
+  ],
+  "constraints": {
+    "max_section_word_count": 2000,
+    "min_citations_per_section": 5,
+    "max_time_per_section_minutes": 20
+  },
+  "style": {
+    "tone": "clear and academic",
+    "citation_format": "APA",
+    "complexity": "undergraduate",
+    "additional_instructions": "Emphasize environmental policy implications. Focus on recent studies (2020-2024)."
+  }
+}
