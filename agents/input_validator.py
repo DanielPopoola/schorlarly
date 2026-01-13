@@ -55,7 +55,7 @@ class InputValidator:
 		if len(template) == 0:
 			raise ValidationError("'template' cannot be empty")
 
-		if len(template) > 20:
+		if len(template) > 40:
 			raise ValidationError("'template' has too many sections (maximum 20)")
 
 		validated_sections = []

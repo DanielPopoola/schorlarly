@@ -13,6 +13,6 @@ DEFAULT_STYLE = {
 }
 
 
-VALID_TONES = ['professional', 'formal', 'conversational']
+VALID_TONES = ['professional', 'formal', 'conversational', 'clear and academic']
 VALID_CITATION_FORMATS = ['APA', 'Harvard', 'MLA', 'Chicago']
 VALID_COMPLEXITY_LEVELS = ['undergraduate', 'graduate', 'expert']

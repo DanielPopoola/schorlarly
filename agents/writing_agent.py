@@ -22,6 +22,7 @@ class WritingAgent:
 		style_preferences: dict[str, Any],
 		constraints: dict[str, Any],
 		previous_section_text: str | None = None,
+		avoid_repetition: bool = False,
 	) -> dict[str, Any]:
 		logger.info(f'\n{"=" * 60}')
 		logger.info(f'WRITING: {section_title}')
@@ -47,6 +48,7 @@ class WritingAgent:
 
 		word_count = self._count_words(content)
 		citations_used = self._extract_citations(content)
+		content = self._validate_citations_post_write(content, available_sources)
 
 		elapsed = time.time() - start_time
 
@@ -71,112 +73,94 @@ class WritingAgent:
 		style_preferences: dict[str, Any],
 		constraints: dict[str, Any],
 		previous_section_text: str | None,
+		avoid_repetition: bool = False,
 	) -> str:
-		sources_text = self._format_sources_for_prompt(available_sources)
+		sources_text = '# AVAILABLE SOURCES (CITE USING EXACT IDs)\n\n'
 
+		for source in available_sources:
+			sources_text += f"""
+			**Source ID: {source['source_id']}** ← USE THIS EXACT ID IN CITATIONS
+			Title: {source['title']}
+			Authors: {', '.join(source['authors'])}
+			Year: {source['year']}
+			Abstract: {source['abstract'][:300]}...
+
+			"""
 		style_text = self._format_style_instructions(style_preferences)
 
 		target_words = constraints.get('max_section_word_count', 1500)
 		min_citations = constraints.get('min_citations_per_section', 3)
 
-		context_text = ''
-		if previous_section_text:
-			context_text = f"""
-## PREVIOUS SECTION (For Continuity)
+		if avoid_repetition and previous_section_text:
+			context_instruction = f"""
+		# CONTENT FROM PREVIOUS SECTION (DO NOT REPEAT)
 
-{previous_section_text[:500]}...
+		{previous_section_text[:500]}...
 
-Ensure this section flows naturally from the previous one.
+		# CRITICAL INSTRUCTION
+
+		The previous section already covered:
+		- Background concepts
+		- General definitions
+		- Problem context
+
+		DO NOT re-explain these. Instead:
+		- Assume the reader already knows the basics
+		- Focus ONLY on the specific objective of THIS section
+		- Build upon (don't repeat) what was said before
+		- Use phrases like "As discussed previously" instead of re-explaining
+
+		If you find yourself defining terms like "RAG" or "Knowledge Graph" again, STOP.
+		Those were already defined in earlier sections.
+		"""
+		else:
+			context_instruction = ''
+
+		example_source_id = available_sources[0]['source_id'] if available_sources else 'arxiv:1234.5678'
+
+		example_citations = f"""
+# CITATION EXAMPLES (COPY THIS FORMAT EXACTLY)
+
+✅ CORRECT:
+"Graph neural networks improve retrieval [{example_source_id}]."
+"The authors found that [{example_source_id}: \\"accuracy increased by 15%\\"]."
+
+❌ WRONG (DO NOT USE):
+"Recent work [source_id] shows..." ← Generic placeholder
+"Studies [1] demonstrate..." ← Numbered reference
+"According to research [arxiv] or [arxiv:XXXXX]..." ← Bare "arxiv" or made-up ID
 """
 
-		prompt = f"""You are an academic writer helping to write a research paper.
+		prompt = f"""You are an expert academic writer.
 
-# PAPER TOPIC
-{topic}
-
-# CURRENT SECTION
-Title: {section_title}
+# PAPER CONTEXT
+Topic: {topic}
+Section: {section_title}
 Objective: {section_objective}
 
 # YOUR TASK
-Write the "{section_title}" section of the paper. This section should:
-- {section_objective}
-- Be approximately {target_words} words
-- Include at least {min_citations} citations
-- Be well-structured with clear paragraphs
-- Use academic tone and formal language
+Write {target_words} words (±20% acceptable) with at least {min_citations} citations.
 
-{context_text}
-
-# STYLE REQUIREMENTS
-{style_text}
-
-# AVAILABLE SOURCES (You MUST cite from these)
+{context_instruction}
 
 {sources_text}
 
-# CITATION FORMAT (CRITICAL - READ CAREFULLY)
+{example_citations}
 
-You MUST use this exact citation format:
+# CRITICAL CITATION RULES
 
-**For general references:**
-[source_id]
+1. ONLY use source IDs from the list above (e.g., {example_source_id})
+2. NEVER use placeholders like [source_id], [source_01], [1], [2]
+3. EVERY factual claim needs a citation with a real ID
+4. If you can't find a relevant source, rephrase the claim more generally
 
-Example: "Transformers revolutionized NLP [arxiv:2301.12345]."
-
-**For direct quotes or specific claims:**
-[source_id: "quoted text"]
-
-Example: "The attention mechanism [arxiv:2301.12345: "allows models to weigh input tokens"] 
-improves context."
-
-**RULES:**
-1. ONLY cite sources from the "AVAILABLE SOURCES" list above
-2. Every factual claim must have a citation
-3. Use source_id exactly as shown (e.g., arxiv:2301.12345)
-4. For direct quotes, use the [source_id: "quote"] format
-5. DO NOT invent or hallucinate citations
-6. DO NOT cite sources not in the list
+# STYLE
+{style_text}
 
 # OUTPUT FORMAT
-
-Write the section in Markdown format:
-- Use ## for subsection headings (if needed)
-- Use proper paragraphs
-- Include citations inline
-- Do not include the section title (it will be added automatically)
-
-Begin writing now:"""
+Write in Markdown. Begin now:"""
 
 		return prompt
-
-	def _format_sources_for_prompt(self, sources: list[dict[str, Any]]) -> str:
-		if not sources:
-			return 'No sources available (this section should rely on general knowledge)'
-
-		formatted = []
-		for i, source in enumerate(sources, 1):
-			source_id = source.get('source_id', 'unknown')
-			title = source.get('title', 'Unknown Title')
-			authors = source.get('authors', [])
-			year = source.get('year', 'Unknown')
-			abstract = source.get('abstract', '')
-
-			authors_str = ', '.join(authors[:3]) if authors else 'Unknown'
-			if len(authors) > 3:
-				authors_str += ' et al.'
-
-			abstract_short = abstract[:300] + '...' if len(abstract) > 300 else abstract
-
-			formatted.append(f"""
-[{i}] **{source_id}**
-Title: {title}
-Authors: {authors_str}
-Year: {year}
-Abstract: {abstract_short}
-""")
-
-		return '\n'.join(formatted)
 
 	def _format_style_instructions(self, style: dict[str, Any]) -> str:
 		tone = style.get('tone', 'professional')
@@ -211,3 +195,52 @@ Abstract: {abstract_short}
 		pattern = r'\[(arxiv:\S+?|doi:\S+?)(?::\s*"[^"]*")?\]'
 		matches = re.findall(pattern, text)
 		return list(set(matches))
+
+	def _validate_citations_post_write(self, content: str, available_sources: list) -> str:
+		"""Check for placeholder citations and warn"""
+		import re
+
+		# Find all citations
+		citations = re.findall(r'\[([^\]]+)\]', content)
+
+		placeholder_patterns = [
+			r'^source_?\d*$',  # [source_id], [source01]
+			r'^\d+$',  # [1], [2]
+			r'^ref_?\d*$',  # [ref_01]
+			r'^citation$',  # [citation]
+			r'^arxiv$',  # [arxiv]
+		]
+
+		valid_ids = {s['source_id'] for s in available_sources}
+
+		warnings = []
+		for citation in citations:
+			citation_clean = citation.strip()
+
+			# 1. Check if it's a valid ID (or starts with one, to handle [ID: "quote"])
+			is_valid = False
+			if citation_clean in valid_ids:
+				is_valid = True
+			else:
+				for vid in valid_ids:
+					if citation_clean.startswith(f'{vid}:'):
+						is_valid = True
+						break
+
+			if is_valid:
+				continue
+
+			# 2. Check if it's a placeholder
+			is_placeholder = any(re.match(pattern, citation_clean, re.IGNORECASE) for pattern in placeholder_patterns)
+
+			if is_placeholder:
+				warnings.append(f'Found placeholder citation: [{citation}]')
+				# Remove placeholder from content
+				content = content.replace(f'[{citation}]', '')
+			else:
+				warnings.append(f'Invalid citation (not in sources): [{citation_clean}]')
+
+		if warnings:
+			logger.warning('Citation issues found:\n' + '\n'.join(warnings))
+
+		return content

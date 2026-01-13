@@ -24,13 +24,47 @@ class SourceFilter:
 
 		# Sort by score, take top K
 		scored_sources.sort(key=lambda x: x[1], reverse=True)
+
+		# Fallback: if no sources pass min_score but we have sources, take top 2
+		if not scored_sources and sources:
+			all_scored = []
+			for source in sources:
+				all_scored.append((source, self._calculate_relevance(source, objective_keywords)))
+			all_scored.sort(key=lambda x: x[1], reverse=True)
+			return [s[0] for s in all_scored[:2]]
+
 		return [s[0] for s in scored_sources[:top_k]]
 
 	def _extract_keywords(self, text: str) -> set[str]:
 		"""Extract meaningful keywords from text"""
-		words = text.lower().split()
-		# Filter: length > 4, not common words
-		keywords = {w for w in words if len(w) > 4 and w not in {'which', 'their', 'about', 'should'}}
+		# Remove punctuation and lowercase
+		import re
+
+		text = re.sub(r'[^\w\s]', '', text.lower())
+		words = text.split()
+
+		# Filter: length >= 3, not very common words
+		stop_words = {
+			'which',
+			'their',
+			'about',
+			'should',
+			'these',
+			'those',
+			'there',
+			'where',
+			'would',
+			'could',
+			'point',
+			'study',
+			'paper',
+			'section',
+			'provide',
+			'discuss',
+			'present',
+			'address',
+		}
+		keywords = {w for w in words if len(w) >= 3 and w not in stop_words}
 		return keywords
 
 	def _calculate_relevance(self, source: dict[str, Any], objective_keywords: set[str]) -> float:

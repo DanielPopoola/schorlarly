@@ -31,13 +31,18 @@ def main():
 	try:
 		orchestrator = Orchestrator(state_dir='state')
 
-		logger.info('=' * 60)
-		logger.info('PHASE 1: INITIALIZATION')
-		logger.info('=' * 60)
-		orchestrator.initialize(input_data)
+		if orchestrator.state_file.exists():
+			logger.info('=' * 60)
+			logger.info('RESUMING PREVIOUS SESSION')
+			logger.info('=' * 60)
+		else:
+			logger.info('=' * 60)
+			logger.info('PHASE 1: INITIALIZATION')
+			logger.info('=' * 60)
+			orchestrator.initialize(input_data)
 
 		logger.info('\n' + '=' * 60)
-		logger.info('PHASE 1: EXECUTION SIMULATION')
+		logger.info('PHASE 2: EXECUTION')
 		logger.info('=' * 60)
 		orchestrator.run()
 

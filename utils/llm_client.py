@@ -49,6 +49,9 @@ class UnifiedLLMClient:
 			messages=[{'role': 'user', 'content': prompt}],
 			max_tokens=max_tokens,
 		)
+		if not response or not hasattr(response, 'choices') or not response.choices:
+			logger.error(f'OpenAI response missing choices: {response}')
+			raise RuntimeError('OpenAI returned an empty or invalid response')
 		return response.choices[0].message.content
 
 	def _call_openrouter(self, prompt: str, max_tokens: int) -> str:
@@ -64,4 +67,7 @@ class UnifiedLLMClient:
 			max_tokens=max_tokens,
 			extra_headers=extra_headers,
 		)
+		if not response or not hasattr(response, 'choices') or not response.choices:
+			logger.error(f'OpenRouter response missing choices: {response}')
+			raise RuntimeError('OpenRouter returned an empty or invalid response')
 		return response.choices[0].message.content

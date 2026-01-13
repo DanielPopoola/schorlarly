@@ -64,6 +64,7 @@ logs/
 
 state/
 sources/
+output/
 # Django stuff:
 *.log
 local_settings.py

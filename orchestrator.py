@@ -1,4 +1,6 @@
 import json
+import signal
+import sys
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -6,9 +8,11 @@ from typing import Any
 from openai import OpenAI
 
 from agents.context_manager import ContextManager
+from agents.export_engine import ExportEngine
 from agents.input_validator import InputValidator
 from agents.research_agent import ResearchAgent
 from agents.source_filter import SourceFilter
+from agents.state_manager import StateManager
 from agents.validation_agent import CitationValidator
 from agents.writing_agent import WritingAgent
 from config.settings import settings
@@ -27,6 +31,7 @@ class Orchestrator:
 		self.sections_dir = self.state_dir / 'sections'
 		self.sections_dir.mkdir(parents=True, exist_ok=True)
 
+		self.state_manager = StateManager(self.state_dir)
 		self.validator = InputValidator()
 		self.research_agent = ResearchAgent(
 			storage_dir=self.state_dir / 'sources',
@@ -42,14 +47,25 @@ class Orchestrator:
 		self.context_manager = ContextManager(self.llm_client)
 		self.profile_manager = ProfileManager()
 		self.current_profile = None
+		self.export_engine = None
+
+		self._setup_signal_handlers()
+
+		self._current_section_id = None
+		self._interruption_requested = False
 
 	def initialize(self, input_data: dict[str, Any]) -> None:
-		logger.info('Initializing orchestrator...')
+		if self.state_manager.can_resume():
+			response = input('\n Found incomplete paper. Resume from checkpoint? (y/n): ')
+			if response.lower() == 'y':
+				logger.info('Resuming from checkpoint...')
+				return
+
 		config = self.validator.validate(input_data)
-		logger.info(f'✓ Input validated. Topic: {config["topic"][:50]}...')
+		logger.info(f'Input validated. Topic: {config["topic"][:50]}...')
 
 		self.current_profile = self.profile_manager.detect(config['template'])
-		logger.info(f'✓ Detected template profile: {self.current_profile.name}')
+		logger.info(f'Detected template profile: {self.current_profile.name}')
 
 		state = {
 			'config': config,
@@ -62,7 +78,7 @@ class Orchestrator:
 			'updated_at': datetime.now(UTC).isoformat(),
 		}
 		self._save_state(state)
-		logger.info(f'✓ State initialized at {self.state_file}')
+		logger.info(f'State initialized at {self.state_file}')
 
 		sections = []
 		for idx, title in enumerate(config['template']):
@@ -93,42 +109,75 @@ class Orchestrator:
 			'created_at': datetime.now(UTC).isoformat(),
 		}
 		self._save_plan(plan)
-		logger.info(f'✓ Plan created with {len(sections)} sections')
-		self._log_plan(plan)
+		logger.info(f'Plan created with {len(sections)} sections')
+		self.state_manager.clear_checkpoint()
 
 	def run(self) -> None:
-		if not self.state_file.exists():
-			raise RuntimeError('State not initialized. Call initialize() first.')
+		if self.state_manager.can_resume():
+			saved = self.state_manager.load_checkpoint()
+			state = saved['state']
+			plan = saved['plan']
+			checkpoint = saved['checkpoint']
+			context_cache = saved['context_cache']
 
-		state = self._load_state()
-		plan = self._load_plan()
+			# Restore context manager
+			self._restore_context_cache(context_cache)
 
-		logger.info(f'\n{"=" * 60}')
-		logger.info('Starting paper generation...')
-		logger.info(f'Topic: {state["config"]["topic"]}')
-		logger.info(f'Sections: {len(plan["sections"])}')
-		logger.info(f'{"=" * 60}\n')
+			start_section = checkpoint['current_section_id']
+			logger.info(f'\n{"=" * 60}')
+			logger.info('RESUMING FROM CHECKPOINT')
+			logger.info(f'{"=" * 60}')
+			logger.info(f'Completed: {checkpoint["completed_sections"]}')
+			logger.info(f'Resuming from: {start_section}')
+			logger.info(f'{"=" * 60}\n')
+		else:
+			state = self._load_state()
+			plan = self._load_plan()
+			start_section = 0
 
-		if not state['research_complete']:
+		if not state.get('research_complete'):
 			self._run_global_research(state, plan)
 
 		if self._writing_agent is None:
-			self._writing_agent = self._init_writing_agent()
+			self._writing_agent = WritingAgent(self.llm_client)
 
-		for section in plan['sections']:
-			if section['status'] in ['validated', 'failed']:
-				logger.info(f'[Section {section["id"]}] {section["title"]} - {section["status"].upper()}')
-				continue
+		# Process sections
+		for section in plan['sections'][start_section:]:
+			# Check for interruption
+			if self._interruption_requested:
+				logger.warning('\n  Interruption detected, saving...')
+				self._save_checkpoint(section['id'], state, plan)
+				logger.info('✓ Checkpoint saved. Run again to resume.')
+				sys.exit(0)
 
-			self._process_section_with_gap_detection(section, state, plan)
+			self._current_section_id = section['id']
 
-		logger.info(f'\n{"=" * 60}')
+			try:
+				self._process_section_with_gap_detection(section, state, plan)
+
+				# Save checkpoint after success
+				if section['status'] == 'validated':
+					self._save_checkpoint(section['id'], state, plan)
+
+			except KeyboardInterrupt:
+				logger.warning('\n Keyboard interrupt - saving...')
+				self._save_checkpoint(section['id'], state, plan)
+				sys.exit(0)
+
+			except Exception as e:
+				logger.error(f'Section {section["id"]} crashed: {e}')
+				self._save_checkpoint(section['id'], state, plan)
+
+				response = input('\nContinue with next section? (y/n): ')
+				if response.lower() != 'y':
+					sys.exit(1)
+
+		self._current_section_id = None
+
+		self.state_manager.clear_checkpoint()
+
 		logger.info('Paper generation complete!')
-		validated = sum(1 for s in plan['sections'] if s['status'] == 'validated')
-		drafted = sum(1 for s in plan['sections'] if s['status'] == 'drafted')
-		failed = sum(1 for s in plan['sections'] if s['status'] == 'failed')
-		logger.info(f'Validated: {validated}, Drafted: {drafted}, Failed: {failed}')
-		logger.info(f'{"=" * 60}\n')
+		self._export_paper(state, plan)
 
 	def _run_global_research(self, state: dict, plan: dict) -> None:
 		logger.info(f'\n{"=" * 60}')
@@ -150,39 +199,49 @@ class Orchestrator:
 		logger.info(f'✓ Global research complete: {len(source_ids)} sources')
 		logger.info(f'{"=" * 60}\n')
 
-	def _init_writing_agent(self) -> WritingAgent:
-		import os
+	def _save_checkpoint(self, current_section_id: int, state: dict, plan: dict) -> None:
+		completed = [s['id'] for s in plan['sections'] if s['status'] in ['validated', 'drafted']]
 
-		if settings.OPENROUTER_API_KEY or os.getenv('OPENROUTER_API_KEY'):
-			api_key = settings.OPENROUTER_API_KEY or os.getenv('OPENROUTER_API_KEY')
-			raw_client = OpenAI(base_url='https://openrouter.ai/api/v1', api_key=api_key)
-			llm_client = UnifiedLLMClient(
-				client=raw_client,
-				model='xiaomi/mimo-v2-flash:free',
-				site_url='https://github.com/DanielPopoola/scholarly',
-				app_name='Scholarly',
+		context_summaries = {}
+		if hasattr(self, 'context_manager'):
+			for summary in self.context_manager.summaries:
+				context_summaries[summary.section_id] = {
+					'title': summary.section_title,
+					'summary': summary.summary,
+					'key_findings': [{'text': f.text, 'source_ids': f.source_ids} for f in summary.key_findings],
+				}
+
+		self.state_manager.save_checkpoint(
+			current_section_id=current_section_id + 1, completed_sections=completed, context_summaries=context_summaries
+		)
+
+	def _restore_context_cache(self, context_cache: dict) -> None:
+		if not context_cache or not hasattr(self, 'context_manager'):
+			return
+
+		from models import Finding, SectionSummary
+
+		for section_id_str, cache_data in context_cache.items():
+			section_id = int(section_id_str)
+
+			findings = [
+				Finding(text=f['text'], source_ids=f['source_ids'], section_id=section_id)
+				for f in cache_data.get('key_findings', [])
+			]
+
+			summary = SectionSummary(
+				section_id=section_id,
+				section_title=cache_data['title'],
+				summary=cache_data['summary'],
+				key_findings=findings,
+				key_terms=[],
 			)
-			logger.info('✓ Writing agent initialized with OpenRouter')
-		elif settings.OPENAI_API_KEY:
-			from openai import OpenAI as OpenAIClient
 
-			raw_client = OpenAIClient(api_key=settings.OPENAI_API_KEY)
-			llm_client = UnifiedLLMClient(client=raw_client, model='gpt-4o-mini')
-			logger.info('✓ Writing agent initialized with OpenAI')
-		elif settings.ANTHROPIC_API_KEY:
-			from anthropic import Anthropic
+			self.context_manager.summaries.append(summary)
 
-			raw_client = Anthropic(api_key=settings.ANTHROPIC_API_KEY)
-			llm_client = UnifiedLLMClient(client=raw_client, model='claude-3-5-sonnet-20241022')
-			logger.info('✓ Writing agent initialized with Anthropic')
-		else:
-			raise RuntimeError('No LLM API key found!')
-
-		return WritingAgent(llm_client=llm_client)
+		logger.info(f'✓ Restored {len(context_cache)} summaries from cache')
 
 	def _generate_objective(self, title: str, profile: Section) -> str:
-		"""Generate objectives tailored to section type"""
-
 		objectives = {
 			SectionType.INTRO_CONCLUSION: {
 				'introduction': 'Introduce the research problem, establish context, and state objectives',
@@ -265,96 +324,301 @@ Output only the refined objective (1-2 sentences)."""
 
 	def _process_section_with_gap_detection(self, section: dict, state: dict, plan: dict) -> None:
 		section_id = section['id']
-		section_title = section['title']
-
+		# 1. Refine objective based on prior findings
 		if section_id > 0:
-			intro_findings = self.context_manager.extract_findings_for_refinement(0)
-			if intro_findings:
-				refined_objective = self._refine_objective(
-					section_title=section_title,
-					initial_objective=section['objective'],
-					topic=state['config']['topic'],
-					prior_findings=intro_findings,
-				)
-				section['objective'] = refined_objective
-				self._save_plan(plan)
+			self._maybe_refine_objective(section, state, plan)
 
-		min_citations = section.get('min_citations', 3)
-		max_words = section.get('max_words', 1500)
-		section_type = section.get('section_type', 'discussion')
+		# 2. Get section constraints and sources
+		config = self._get_section_config(section)
+		sources = self._filter_sources(section, plan, config)
 
-		logger.info(f'\n[Section {section_id}] Type: {section_type}, Citations: {min_citations}+, Words: {max_words}')
+		logger.info(f'\n[Section {section_id}] {config}')
+		self._log_warnings(section)
 
-		# Check if this section needs code/diagrams
-		if section.get('requires_code'):
-			logger.warning('Section requires code examples (not yet implemented)')
-		if section.get('requires_diagrams'):
-			logger.warning('Section requires diagrams (not yet implemented)')
+		# 3. Write with retries
+		for attempt in range(1, config['max_retries'] + 1):
+			result = self._attempt_write(section, state, sources, config, attempt)
 
+			if result == 'success':
+				self._finalize_section(section, plan, attempt)
+				return
+			elif result == 'gap_detected':
+				sources = self._handle_gap(section, state, sources)
+			elif result == 'failed':
+				continue
+
+		# 4. Mark as failed after all retries
+		self._mark_failed(section, state, plan)
+
+	def _maybe_refine_objective(self, section: dict, state: dict, plan: dict) -> None:
+		"""Refine objective based on introduction findings"""
+		intro_findings = self.context_manager.extract_findings_for_refinement(0)
+		if not intro_findings:
+			return
+
+		refined = self._refine_objective(
+			section_title=section['title'],
+			initial_objective=section['objective'],
+			topic=state['config']['topic'],
+			prior_findings=intro_findings,
+		)
+		section['objective'] = refined
+		self._save_plan(plan)
+
+	def _get_section_config(self, section: dict) -> dict:
+		"""Extract section configuration"""
+		return {
+			'min_citations': section.get('min_citations', 3),
+			'max_words': section.get('max_words', 1500),
+			'section_type': section.get('section_type', 'discussion'),
+			'max_retries': 3,
+		}
+
+	def _filter_sources(self, section: dict, plan: dict, config: dict) -> list:
+		"""Filter global sources by relevance"""
 		all_sources = [self.research_agent.get_source(sid) for sid in plan.get('global_source_ids', [])]
 		all_sources = [s for s in all_sources if s]
 
+		# Choose strategy based on section type
 		if section.get('research_strategy') == 'targeted':
-			source_filter = SourceFilter()
-			relevant_sources = source_filter.filter_by_relevance(
-				sources=all_sources, objective=section['objective'], min_score=0.3, top_k=8
-			)
-			logger.info(f'  Filtered {len(all_sources)} → {len(relevant_sources)} (targeted strategy)')
+			min_score, top_k = 0.3, 8
+			strategy = 'targeted'
 		else:
-			source_filter = SourceFilter()
-			relevant_sources = source_filter.filter_by_relevance(
-				sources=all_sources, objective=section['objective'], min_score=0.2, top_k=4
+			min_score, top_k = 0.2, 4
+			strategy = 'global'
+
+		source_filter = SourceFilter()
+		filtered = source_filter.filter_by_relevance(
+			sources=all_sources, objective=section['objective'], min_score=min_score, top_k=top_k
+		)
+
+		logger.info(f'  Filtered {len(all_sources)} → {len(filtered)} ({strategy} strategy)')
+		return filtered
+
+	def _log_warnings(self, section: dict) -> None:
+		"""Log unimplemented features"""
+		if section.get('requires_code'):
+			logger.warning('  ⚠️  Section requires code examples (not yet implemented)')
+		if section.get('requires_diagrams'):
+			logger.warning('  ⚠️  Section requires diagrams (not yet implemented)')
+
+	def _attempt_write(self, section: dict, state: dict, sources: list, config: dict, attempt: int) -> str:
+		try:
+			# Get context from previous section
+			section_id = section['id']
+			previous_context = self._get_previous_context(section_id)
+
+			# Write section
+			result = self._writing_agent.write_section(  # type: ignore
+				section_title=section['title'],
+				section_objective=section['objective'],
+				topic=state['config']['topic'],
+				available_sources=sources,
+				style_preferences=state['config']['style'],
+				constraints={
+					'max_section_word_count': config['max_words'],
+					'min_citations_per_section': config['min_citations'],
+				},
+				previous_section_text=previous_context,
+				avoid_repetition=(section_id > 3),  # Only for later sections
 			)
-			logger.info(f'  Filtered {len(all_sources)} → {len(relevant_sources)} (global strategy)')
 
-		max_retries = 3
-		for attempt in range(1, max_retries + 1):
-			try:
-				result = self._writing_agent.write_section(  # type: ignore
-					section_title=section_title,
-					section_objective=section['objective'],
-					topic=state['config']['topic'],
-					available_sources=relevant_sources,
-					style_preferences=state['config']['style'],
-					constraints={'max_section_word_count': max_words, 'min_citations_per_section': min_citations},
-					previous_section_text=self._load_section_content(section_id - 1) if section_id > 0 else None,
-				)
+			# Validate
+			validator = CitationValidator(self.research_agent.sources_db)
+			validation = validator.validate_section(
+				section_id=section_id,
+				content=result['content'],
+				min_citations=config['min_citations'],
+				max_words=config['max_words'],
+			)
 
-				validator = CitationValidator(self.research_agent.sources_db)
-				validation = validator.validate_section(
-					section_id=section_id, content=result['content'], min_citations=min_citations, max_words=max_words
-				)
+			if validation.passed:
+				# Store result for finalization
+				self._temp_result = result
+				return 'success'
 
-				if validation.passed:
-					self._save_section_content(section_id, section_title, result['content'])
-					section['status'] = 'validated'
-					section['word_count'] = result['word_count']
-					section['citations_count'] = len(result['citations_used'])
-					self._save_plan(plan)
-					logger.info(f'  ✓ Section validated (attempt {attempt})')
-					return
+			# Check if we need gap research
+			critical_issues = [i for i in validation.issues if i.severity == Severity.CRITICAL]
+			if critical_issues and validation.missing_topics:
+				self._temp_validation = validation
+				logger.warning(f'  Gap detected: {validation.missing_topics}')
+				return 'gap_detected'
 
-				critical_issues = [i for i in validation.issues if i.severity == Severity.CRITICAL]
-				if critical_issues and hasattr(validation, 'missing_topics') and validation.missing_topics:
-					logger.warning(f'  Gap detected: {validation.missing_topics}')
-					gap_query = f'{state["config"]["topic"]} {" ".join(validation.missing_topics)}'
-					new_source_ids = self.research_agent.research_section(
-						topic=gap_query, section_title=section_title, section_objective=section['objective']
-					)
-					new_sources = [self.research_agent.get_source(sid) for sid in new_source_ids]
-					relevant_sources.extend([s for s in new_sources if s])
-					logger.info(f'  Added {len(new_sources)} gap-filling sources, retrying...')
-				else:
-					logger.warning(f'  Validation failed (attempt {attempt})')
+			logger.warning(f'  Validation failed (attempt {attempt}): {[i.message for i in validation.issues[:3]]}')
+			return 'failed'
 
-			except Exception as e:
-				logger.error(f'  Writing failed (attempt {attempt}): {e}')
+		except Exception as e:
+			logger.error(f'  Writing failed (attempt {attempt}): {e}')
+			return 'failed'
 
+	def _get_previous_context(self, section_id: int) -> str | None:
+		if section_id == 0:
+			return None
+
+		# For early sections (1-3): use full previous section
+		if section_id <= 3:
+			return self._load_section_content(section_id - 1)
+
+		# For later sections (4+): use compressed summaries
+		return self.context_manager.get_context_for_section(current_section_id=section_id, window_size=3)
+
+	def _handle_gap(self, section: dict, state: dict, sources: list) -> list:
+		validation = self._temp_validation  # Stored from _attempt_write
+
+		gap_query = f'{state["config"]["topic"]} {" ".join(validation.missing_topics)}'
+		new_source_ids = self.research_agent.research_section(
+			topic=gap_query, section_title=section['title'], section_objective=section['objective']
+		)
+
+		new_sources = [self.research_agent.get_source(sid) for sid in new_source_ids]
+		sources.extend([s for s in new_sources if s])
+
+		logger.info(f'  Added {len(new_sources)} gap-filling sources, retrying...')
+		return sources
+
+	def _finalize_section(self, section: dict, plan: dict, attempt: int) -> None:
+		result = self._temp_result  # Stored from _attempt_write
+		section_id = section['id']
+
+		# Save content
+		self._save_section_content(section_id, section['title'], result['content'])
+
+		# Summarize for context manager
+		if section_id > 0:
+			summary = self.context_manager.summarize_section(
+				section_id=section_id,
+				section_title=section['title'],
+				content=result['content'],
+				sources_used=result['citations_used'],
+			)
+			section['summary'] = summary.summary
+
+		# Update metadata
+		section['status'] = 'validated'
+		section['word_count'] = result['word_count']
+		section['citations_count'] = len(result['citations_used'])
+		section['completed_at'] = datetime.now().isoformat()
+		self._save_plan(plan)
+
+		logger.info(f'  ✓ Section validated (attempt {attempt})')
+
+	def _mark_failed(self, section: dict, state: dict, plan: dict) -> None:
+		"""Mark section as failed after all retries"""
 		section['status'] = 'failed'
-		state['failed_sections'].append(section_id)
+		state['failed_sections'].append(section['id'])
 		self._save_plan(plan)
 		self._save_state(state)
-		logger.error(f'  ✗ Section failed after {max_retries} attempts')
+		logger.error(f'  ✗ Section failed after {section.get("max_retries", 3)} attempts')
+
+	def _export_paper(self, state: dict, plan: dict) -> None:
+		"""Export completed paper to PDF and DOCX"""
+		logger.info(f'\n{"=" * 60}')
+		logger.info('EXPORTING PAPER')
+		logger.info(f'{"=" * 60}\n')
+
+		if self.export_engine is None:
+			self.export_engine = ExportEngine(
+				profile_name=self.current_profile.name,  # type: ignore
+				output_dir=self.state_dir.parent / 'output',
+			)
+
+		try:
+			metadata = {
+				'topic': state['config']['topic'],
+				'author': state['config'].get('author', 'Anonymous'),
+				'abstract': self._generate_abstract(plan),
+				'created_at': state['created_at'],
+				'profile': self.current_profile.name,  # type: ignore
+			}
+
+			outputs = self.export_engine.export_paper(
+				sections_dir=self.sections_dir,
+				sources_db=self.research_agent.sources_db,
+				metadata=metadata,
+				formats=('pdf', 'docx'),
+			)
+
+			logger.info('✓ Export complete:')
+			for fmt, path in outputs.items():
+				logger.info(f'  - {fmt.upper()}: {path}')
+
+			logger.info(f'\n{"=" * 60}\n')
+
+		except Exception as e:
+			logger.error(f'Export failed: {e}')
+			logger.warning('Paper sections saved in markdown format in state/sections/')
+
+	def _generate_abstract(self, plan: dict) -> str:
+		intro_file = self.sections_dir / '00_introduction.md'
+		methodology_files = list(self.sections_dir.glob('*methodology*.md')) + list(
+			self.sections_dir.glob('*system_analysis*.md')
+		)
+		findings_files = (
+			list(self.sections_dir.glob('*findings*.md'))
+			+ list(self.sections_dir.glob('*results*.md'))
+			+ list(self.sections_dir.glob('*implementation*.md'))
+		)
+		conclusion_files = list(self.sections_dir.glob('*conclusion*.md'))
+
+		intro_text = intro_file.read_text()[:800] if intro_file.exists() else ''
+		methodology_text = methodology_files[0].read_text()[:600] if methodology_files else ''
+		findings_text = findings_files[0].read_text()[:600] if findings_files else ''
+		conclusion_text = conclusion_files[0].read_text()[:600] if conclusion_files else ''
+
+		# Generate abstract using LLM
+		prompt = f"""Generate a 150-200 word academic abstract for this research paper.
+
+	# Paper Topic
+	{plan['topic']}
+
+	# Introduction (excerpt)
+	{intro_text}
+
+	# Methodology (excerpt)
+	{methodology_text}
+
+	# Key Findings (excerpt)
+	{findings_text}
+
+	# Conclusion (excerpt)
+	{conclusion_text}
+
+	# Abstract Requirements
+	- 150-200 words ONLY (strict limit)
+	- Include: problem statement, methods, key findings, implications
+	- Use past tense ("This research examined...", "Results showed...")
+	- No citations in abstract
+	- One paragraph, no bullet points
+	- Professional academic tone
+
+	Write ONLY the abstract, nothing else:"""
+
+		try:
+			abstract = self.llm_client.generate(prompt, max_tokens=300).strip()
+
+			word_count = len(abstract.split())
+			if word_count < 100:
+				logger.warning(f'Abstract too short ({word_count} words), using fallback')
+			elif word_count > 250:
+				abstract = ' '.join(abstract.split()[:200]) + '...'
+
+			return abstract
+
+		except Exception as e:
+			logger.error(f'Abstract generation failed: {e}')
+			return ''
+
+	def _setup_signal_handlers(self) -> None:
+		def signal_handler(signum, frame):
+			signal_name = signal.Signals(signum).name
+			logger.warning(f'\n\n Received {signal_name} - saving progress...')
+			self._interruption_requested = True
+
+			if self._current_section_id is not None:
+				logger.info(f'Finishing section {self._current_section_id} before exit...')
+
+		signal.signal(signal.SIGINT, signal_handler)
+		signal.signal(signal.SIGTERM, signal_handler)
 
 	def _save_state(self, state: dict) -> None:
 		state['updated_at'] = datetime.now(UTC).isoformat()
@@ -373,19 +637,10 @@ Output only the refined objective (1-2 sentences)."""
 		with open(self.plan_file) as f:
 			return json.load(f)
 
-	def _log_plan(self, plan: dict) -> None:
-		logger.info(f'\n{"=" * 60}')
-		logger.info('EXECUTION PLAN')
-		logger.info(f'{"=" * 60}')
-		logger.info(f'Topic: {plan["topic"]}')
-		logger.info(f'Total sections: {plan["total_sections"]}\n')
-		for section in plan['sections']:
-			logger.info(f'[{section["id"]}] {section["title"]}')
-			logger.info(f'    Objective: {section["objective"]}\n')
-		logger.info(f'{"=" * 60}\n')
-
 	def _save_section_content(self, section_id: int, section_title: str, content: str) -> None:
-		filename = f'{section_id:02d}_{section_title.lower().replace(" ", "_")}.md'
+		# Sanitize filename by replacing spaces and slashes
+		safe_title = section_title.lower().replace(' ', '_').replace('/', '_')
+		filename = f'{section_id:02d}_{safe_title}.md'
 		filepath = self.sections_dir / filename
 		with open(filepath, 'w') as f:
 			f.write(f'# {section_title}\n\n{content}')
@@ -397,6 +652,85 @@ Output only the refined objective (1-2 sentences)."""
 		with open(files[0]) as f:
 			lines = f.readlines()
 			return ''.join(lines[2:]) if len(lines) > 2 else None
+
+	def _generate_quality_report(self, plan: dict) -> None:
+		metrics = {
+			'total_sections': len(plan['sections']),
+			'validated_sections': sum(1 for s in plan['sections'] if s['status'] == 'validated'),
+			'total_words': sum(s.get('word_count', 0) for s in plan['sections']),
+			'total_citations': sum(s.get('citations_count', 0) for s in plan['sections']),
+			'avg_citations_per_section': 0.0,
+			'sections_under_min_words': 0,
+			'sections_over_max_words': 0,
+			'sections_with_placeholders': 0,
+		}
+
+		if metrics['validated_sections'] > 0:
+			metrics['avg_citations_per_section'] = metrics['total_citations'] / metrics['validated_sections']
+
+		# Check word count compliance
+		for section in plan['sections']:
+			if section['status'] != 'validated':
+				continue
+
+			word_count = section.get('word_count', 0)
+			min_words = section.get('min_words', 0)
+			max_words = section.get('max_words', 1500)
+
+			if word_count < min_words * 0.8:  # 20% under
+				metrics['sections_under_min_words'] += 1
+			if word_count > max_words * 1.2:  # 20% over
+				metrics['sections_over_max_words'] += 1
+
+		# Check for placeholder citations in saved sections
+		import re
+
+		for section_file in self.sections_dir.glob('*.md'):
+			content = section_file.read_text()
+			if re.search(r'\[source_?\w*\]', content, re.IGNORECASE):
+				metrics['sections_with_placeholders'] += 1
+
+		# Calculate estimated page count
+		estimated_pages = metrics['total_words'] / 250  # ~250 words per page double-spaced
+
+		# Generate report
+		logger.info(f'\n{"=" * 60}')
+		logger.info('QUALITY REPORT')
+		logger.info(f'{"=" * 60}')
+		logger.info(f'Total Sections: {metrics["total_sections"]}')
+		logger.info(
+			f'Validated: {metrics["validated_sections"]} ({
+				metrics["validated_sections"] / metrics["total_sections"] * 100:.1f}%)'
+		)
+		logger.info(f'Total Words: {metrics["total_words"]:,}')
+		logger.info(f'Estimated Pages: {estimated_pages:.0f}')
+		logger.info(f'Total Citations: {metrics["total_citations"]}')
+		logger.info(f'Avg Citations/Section: {metrics["avg_citations_per_section"]:.1f}')
+
+		# Warnings
+		if metrics['sections_under_min_words'] > 0:
+			logger.warning(f'{metrics["sections_under_min_words"]} sections under word count')
+
+		if metrics['sections_over_max_words'] > 0:
+			logger.warning(f'{metrics["sections_over_max_words"]} sections over word count')
+
+		if metrics['sections_with_placeholders'] > 0:
+			logger.error(f'{metrics["sections_with_placeholders"]} sections contain placeholder citations!')
+			logger.error('Review and fix before export.')
+
+		if estimated_pages > 60:
+			logger.warning(f'Paper is {estimated_pages:.0f} pages (consider reducing word counts)')
+
+		logger.info(f'{"=" * 60}\n')
+
+		# Save metrics to file
+		import json
+
+		metrics_file = self.state_dir / 'quality_metrics.json'
+		with open(metrics_file, 'w') as f:
+			json.dump(metrics, f, indent=2)
+
+		logger.info(f'Quality metrics saved to: {metrics_file}')
 
 
 if __name__ == '__main__':
