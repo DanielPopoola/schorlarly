@@ -1,0 +1,61 @@
+[project]
+name = "schorlarly"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "anthropic>=0.75.0",
+    "arxiv>=2.4.0",
+    "dacite>=1.9.2",
+    "loguru>=0.7.3",
+    "openai>=2.14.0",
+    "pre-commit>=4.5.1",
+    "pydantic-settings>=2.12.0",
+    "pytest>=9.0.2",
+    "requests>=2.32.5",
+    "ruff>=0.14.10",
+    "pyaml>=25.7.0",
+    "tenacity>=8.2.3",
+    "python-docx>=1.2.0",
+    "markdown>=3.10",
+    "pydantic>=2.12.5",
+    "python-dotenv>=1.2.1",
+]
+
+[dependency-groups]
+dev = [
+    "ty>=0.0.8",
+]
+
+[tool.pytest.ini_options]
+pythonpath = "."
+
+
+[tool.ruff]
+line-length = 120
+exclude = [
+    "tests",
+]
+
+[tool.ruff.format]
+quote-style = "single"
+indent-style = "tab"
+docstring-code-format = true
+
+
+[tool.ruff.lint]
+select = [
+    # pycodestyle
+    "E",
+    # Pyflakes
+    "F",
+    # pyupgrade
+    "UP",
+    # flake8-bugbear
+    "B",
+    # flake8-simplify
+    "SIM",
+    # isort
+    "I",
+]

@@ -1,0 +1,232 @@
+template:
+  name: "Final Year Project"
+  description: "Standard Nigerian university final year project format for Computer Science and related disciplines."
+  citation_style: "IEEE"
+
+# Section definitions
+sections:
+  - name: "Introduction"
+    type: "interactive"
+    word_count:
+      min: 300
+      max: 500
+    depends_on: []
+    
+  - name: "Background to the Study"
+    type: "research"
+    word_count:
+      min: 800
+      max: 1200
+    depends_on: ["Introduction"]
+    research:
+      required: true
+      min_citations: 5
+      max_citations: 10
+    
+  - name: "Statement of the Problem"
+    type: "interactive"
+    word_count:
+      min: 200
+      max: 400
+    depends_on: ["Background to the Study"]
+    
+  - name: "Objective of the Study"
+    type: "interactive"
+    word_count:
+      min: 150
+      max: 300
+    depends_on: ["Statement of the Problem"]
+    
+  - name: "Significance of the Study"
+    type: "synthesis"
+    word_count:
+      min: 100
+      max: 300
+    depends_on: ["Objective of the Study"]
+    
+  - name: "Scope of the Study"
+    type: "interactive"
+    word_count:
+      min: 200
+      max: 350
+    depends_on: []
+    
+  - name: "Limitations"
+    type: "interactive"
+    word_count:
+      min: 150
+      max: 300
+    depends_on: []
+    
+  - name: "Organization of the Study"
+    type: "automated"
+    word_count:
+      min: 150
+      max: 250
+    depends_on: []  # Can access all sections
+    
+  - name: "Definition of Terms"
+    type: "automated"
+    word_count:
+      min: 200
+      max: 400
+    depends_on: []
+    
+  - name: "Existing Approach to Problem Identified"
+    type: "research"
+    word_count:
+      min: 600
+      max: 1000
+    depends_on: ["Background to the Study"]
+    research:
+      required: true
+      min_citations: 3
+      max_citations: 8
+    
+  - name: "Effort to counter/solve existing challenges"
+    type: "research"
+    word_count:
+      min: 400
+      max: 700
+    depends_on: ["Existing Approach to Problem Identified"]
+    
+  - name: "Specific Approach to Problem Identified"
+    type: "interactive"
+    word_count:
+      min: 500
+      max: 800
+    depends_on: ["Effort to counter/solve existing challenges"]
+    
+  - name: "System Analysis"
+    type: "evidence"
+    word_count:
+      min: 600
+      max: 1000
+    depends_on: ["Specific Approach to Problem Identified"]
+    
+  - name: "Method of Data Collection"
+    type: "interactive"
+    word_count:
+      min: 300
+      max: 500
+    depends_on: []
+    
+  - name: "Problem of the Current System"
+    type: "interactive"
+    word_count:
+      min: 300
+      max: 500
+    depends_on: ["System Analysis"]
+    
+  - name: "Objective of the new system"
+    type: "interactive"
+    word_count:
+      min: 200
+      max: 400
+    depends_on: ["Problem of the Current System"]
+    
+  - name: "Menu Specification"
+    type: "evidence"
+    word_count:
+      min: 200
+      max: 400
+    depends_on: []
+    
+  - name: "Overview of the System Flowchart"
+    type: "evidence"
+    word_count:
+      min: 300
+      max: 500
+    depends_on: ["System Analysis"]
+    
+  - name: "Procedural Flowchart"
+    type: "evidence"
+    word_count:
+      min: 200
+      max: 400
+    depends_on: ["Overview of the System Flowchart"]
+    
+  - name: "System Design"
+    type: "evidence"
+    word_count:
+      min: 800
+      max: 1200
+    depends_on: ["System Analysis"]
+    
+  - name: "System Implementation"
+    type: "evidence"
+    word_count:
+      min: 1000
+      max: 1500
+    depends_on: ["System Design"]
+    code_required: true
+    
+  - name: "System Requirement"
+    type: "automated"
+    word_count:
+      min: 200
+      max: 400
+    depends_on: []
+    
+  - name: "Hardware Requirement"
+    type: "automated"
+    word_count:
+      min: 100
+      max: 200
+    depends_on: ["System Requirement"]
+    
+  - name: "Software Requirement"
+    type: "automated"
+    word_count:
+      min: 150
+      max: 300
+    depends_on: ["System Requirement"]
+    
+  - name: "Test-Run"
+    type: "evidence"
+    word_count:
+      min: 600
+      max: 1000
+    depends_on: ["System Implementation"]
+    
+  - name: "Program Documentation"
+    type: "evidence"
+    word_count:
+      min: 400
+      max: 700
+    depends_on: ["System Implementation"]
+    
+  - name: "User Manual"
+    type: "automated"
+    word_count:
+      min: 500
+      max: 800
+    depends_on: ["System Implementation"]
+    
+  - name: "System Maintenance"
+    type: "interactive"
+    word_count:
+      min: 300
+      max: 500
+    depends_on: ["System Implementation"]
+    
+  - name: "Summary"
+    type: "synthesis"
+    word_count:
+      min: 400
+      max: 600
+    depends_on: []  # Summarizes entire paper
+    
+  - name: "Conclusion"
+    type: "synthesis"
+    word_count:
+      min: 300
+      max: 500
+    depends_on: ["Summary"]
+    
+  - name: "Recommendations"
+    type: "synthesis"
+    word_count:
+      min: 300
+      max: 500
+    depends_on: ["Conclusion"]

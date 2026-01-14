@@ -1,0 +1,50 @@
+project:
+  name: "Schorlarly"
+  version: "0.1.0"
+
+# LLM Configuration
+llm:
+  provider: "openrouter"  # or "anthropic"
+  model: "anthropic/claude-sonnet-4"
+  api_key_env: "LLM_API_KEY"
+  temperature: 0.7
+  max_tokens: 4000
+
+# Research Configuration  
+research:
+  primary:
+    provider: "perplexity"
+    api_key_env: "PERPLEXITY_API_KEY"
+    max_results: 5
+  fallback:
+    provider: "arxiv"
+    max_results: 5
+  retry:
+    max_attempts: 3
+    backoff_factor: 2  # Wait 2^attempt seconds
+
+# Citation Configuration
+citation:
+  style: "IEEE"  # MLA, Chicago, IEEE
+  validation:
+    existence_check: true
+    relevance_check: true
+    min_relevance_score: 0.3
+    auto_accept_score: 0.7
+
+# Writing Style
+writing:
+  tone: "formal-academic"
+  person: "third"
+  active_voice_preference: 0.6  # 0-1 scale
+
+# Output Configuration
+output:
+  state_dir: "output/state"
+  drafts_dir: "output/drafts"
+  final_dir: "output/final"
+  format: "markdown"  # intermediate format
+  export_format: "docx"
+
+# Active template
+active_template: "final_year_project"
