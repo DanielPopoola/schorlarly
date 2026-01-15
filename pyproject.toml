@@ -38,6 +38,11 @@ exclude = [
     "tests",
 ]
 
+[tool.ty.src]
+include = ["src"]
+exclude = ["src/export"]
+
+
 [tool.ruff.format]
 quote-style = "single"
 indent-style = "tab"

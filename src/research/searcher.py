@@ -1,5 +1,4 @@
 import logging
-import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Any
@@ -82,7 +81,6 @@ class ArXivSearcher(BaseSearcher):
 	def search(self, query: str, max_results: int = 10) -> list[Paper]:
 		logger.info(f'Searching arXiv for: {query}')
 
-		time.sleep(33)
 		client = arxiv.Client(delay_seconds=3, num_retries=3)
 		search = arxiv.Search(query=query, max_results=max_results, sort_by=arxiv.SortCriterion.Relevance)
 

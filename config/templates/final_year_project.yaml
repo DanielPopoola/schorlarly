@@ -15,8 +15,8 @@ sections:
   - name: "Background to the Study"
     type: "research"
     word_count:
-      min: 800
-      max: 1200
+      min: 500
+      max: 1000
     depends_on: ["Introduction"]
     research:
       required: true
@@ -68,14 +68,14 @@ sections:
   - name: "Definition of Terms"
     type: "automated"
     word_count:
-      min: 200
-      max: 400
+      min: 100
+      max: 200
     depends_on: []
     
   - name: "Existing Approach to Problem Identified"
     type: "research"
     word_count:
-      min: 600
+      min: 500
       max: 1000
     depends_on: ["Background to the Study"]
     research:
@@ -87,21 +87,21 @@ sections:
     type: "research"
     word_count:
       min: 400
-      max: 700
+      max: 600
     depends_on: ["Existing Approach to Problem Identified"]
     
   - name: "Specific Approach to Problem Identified"
     type: "interactive"
     word_count:
-      min: 500
-      max: 800
+      min: 400
+      max: 600
     depends_on: ["Effort to counter/solve existing challenges"]
     
   - name: "System Analysis"
     type: "evidence"
     word_count:
-      min: 600
-      max: 1000
+      min: 400
+      max: 800
     depends_on: ["Specific Approach to Problem Identified"]
     
   - name: "Method of Data Collection"
@@ -149,15 +149,15 @@ sections:
   - name: "System Design"
     type: "evidence"
     word_count:
-      min: 800
-      max: 1200
+      min: 500
+      max: 1000
     depends_on: ["System Analysis"]
     
   - name: "System Implementation"
     type: "evidence"
     word_count:
-      min: 1000
-      max: 1500
+      min: 800
+      max: 1200
     depends_on: ["System Design"]
     code_required: true
     

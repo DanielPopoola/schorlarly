@@ -4,6 +4,7 @@ from pathlib import Path
 from src.core.config_loader import SectionConfig, get_config
 from src.core.context_manager import ContextManager
 from src.core.state_manager import SectionStatus, StateManager
+from src.export.word_exporter import create_word_exporter_from_config
 from src.generators import GeneratorFactory
 from src.llm.client import create_llm_client_from_config
 from src.parsers.input_parser import InputParser, ProjectInput
@@ -99,12 +100,27 @@ class Orchestrator:
 	def _finalize_paper(self):
 		logger.info('Finalizing paper...')
 
-		# TODO: Implement actual finalization
-		# - Combine all sections
-		# - Export to Word
-		# - Generate summary report
+		exporter = create_word_exporter_from_config(
+			self.context_manager,
+			{'output': self.config.get_output_config(), 'citation': self.config.get_citation_config()},
+		)
 
-		logger.info('✓ Paper generation complete!')
+		# Export to Word
+		output_path = exporter.export(
+			project_name=self.project_name,
+			project_title=self.project_input.title if self.project_input else self.project_name,
+			author=self.project_input.author if self.project_input else 'Unknown',
+		)
+
+		summary = self.context_manager.get_summary()
+		logger.info(f'\n{"=" * 60}')
+		logger.info('PAPER GENERATION COMPLETE')
+		logger.info(f'{"=" * 60}')
+		logger.info(f'Output: {output_path}')
+		logger.info(f'Total sections: {summary["total_sections"]}')
+		logger.info(f'Total words: {summary["total_words"]:,}')
+		logger.info(f'Total citations: {summary["total_citations"]}')
+		logger.info(f'{"=" * 60}')
 
 	def load_input(self, input_file: Path):
 		logger.info(f'Loading input from: {input_file}')
