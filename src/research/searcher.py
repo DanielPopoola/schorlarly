@@ -147,12 +147,26 @@ class ResearchSearcher:
 
 	def build_search_query(self, domain: str, keywords: list[str], problem_statement: str) -> str:
 		"""Build focused search query from project context"""
-		# Extract key phrases from problem statement (first 100 words)
-		problem_snippet = ' '.join(problem_statement.split()[:100])
+		# Extract key phrases from problem statement (first 50 words) to avoid overly long queries
+		problem_snippet = ' '.join(problem_statement.split()[:50])
 
 		# Combine domain + top keywords
 		query_parts = [domain] + keywords[:7]
+
+		# Add problem snippet if it exists
+		if problem_snippet:
+			query_parts.insert(0, problem_snippet)
+
 		query = ' '.join(query_parts)
 
+		# Ensure the total query length is not excessive for API limits
+		max_query_length = 250  # A reasonable limit for many search APIs
+		if len(query) > max_query_length:
+			query = query[:max_query_length]
+			# Try to end on a whole word if possible
+			last_space = query.rfind(' ')
+			if last_space > 0:
+				query = query[:last_space]
+
 		logger.info(f'Built search query: {query}')
-		return problem_snippet + query
+		return query
