@@ -68,7 +68,7 @@ class ConfigLoader:
 				return [replace_env(item) for item in obj]
 			return obj
 
-		return replace_env(config)  # type: ignore
+		return replace_env(config)
 
 	def get_sections(self) -> list[SectionConfig]:
 		sections = []

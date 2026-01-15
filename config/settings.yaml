@@ -15,10 +15,10 @@ research:
   primary:
     provider: "perplexity"
     api_key_env: "PERPLEXITY_API_KEY"
-    max_results: 5
+    max_results: 20
   fallback:
     provider: "arxiv"
-    max_results: 5
+    max_results: 10
   retry:
     max_attempts: 3
     backoff_factor: 2  # Wait 2^attempt seconds
