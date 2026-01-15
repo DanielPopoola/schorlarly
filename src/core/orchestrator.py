@@ -2,10 +2,12 @@ import logging
 from pathlib import Path
 
 from src.core.config_loader import SectionConfig, get_config
-from src.core.context_manager import ContextManager, SectionContext
+from src.core.context_manager import ContextManager
 from src.core.state_manager import SectionStatus, StateManager
+from src.generators import GeneratorFactory
 from src.llm.client import create_llm_client_from_config
 from src.parsers.input_parser import InputParser, ProjectInput
+from src.research import CitationValidator, ResearchSearcher
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -33,6 +35,15 @@ class Orchestrator:
 		llm_config = self.config.get_llm_config()
 		self.llm_client = create_llm_client_from_config(llm_config)
 		self.parser = InputParser(self.llm_client)
+
+		self.research_searcher = ResearchSearcher(self.config.get_research_config())
+		self.citation_validator = CitationValidator(self.llm_client, self.config.get_citation_config())
+
+		generator_config = {'writing': self.config.get_writing_config(), 'citation': self.config.get_citation_config()}
+
+		self.factory = GeneratorFactory(
+			self.llm_client, generator_config, self.research_searcher, self.citation_validator
+		)
 
 		logger.info(f'Orchestrator initialized for project: {project_name}')
 
@@ -69,17 +80,8 @@ class Orchestrator:
 		logger.info(f'  Dependencies: {section_config.depends_on}')
 		logger.info(f'  Context includes {len(context["previously_completed"])} previous sections')
 
-		# TODO: Call generator and get section_context back
-		# For now, create dummy section context
-		section_context = SectionContext(
-			name=section_config.name,
-			content=f'[Generated content for {section_config.name}]',
-			key_points=[f'Point 1 from {section_config.name}', f'Point 2 from {section_config.name}'],
-			citations=[],
-			word_count=500,
-			terms_defined=[],
-		)
-
+		generator = self.factory.get_generator(section_config.type)
+		section_context = generator.generate(section_config, self.project_input, context)
 		# Add to context manager
 		self.context_manager.add_section(section_context)
 
