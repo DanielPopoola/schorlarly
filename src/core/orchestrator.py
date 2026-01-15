@@ -4,6 +4,8 @@ from pathlib import Path
 from src.core.config_loader import SectionConfig, get_config
 from src.core.context_manager import ContextManager, SectionContext
 from src.core.state_manager import SectionStatus, StateManager
+from src.llm.client import create_llm_client_from_config
+from src.parsers.input_parser import InputParser, ProjectInput
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -12,6 +14,7 @@ logger = logging.getLogger(__name__)
 class Orchestrator:
 	def __init__(self, project_name: str):
 		self.project_name = project_name
+		self.project_input: ProjectInput | None = None
 		self.config = get_config()
 
 		output_config = self.config.get_output_config()
@@ -26,6 +29,10 @@ class Orchestrator:
 		self.sections = self.config.get_sections()
 		section_names = [s.name for s in self.sections]
 		self.state_manager.initialize_sections(section_names)
+
+		llm_config = self.config.get_llm_config()
+		self.llm_client = create_llm_client_from_config(llm_config)
+		self.parser = InputParser(self.llm_client)
 
 		logger.info(f'Orchestrator initialized for project: {project_name}')
 
@@ -52,6 +59,10 @@ class Orchestrator:
 		self.state_manager.set_section_status(section_config.name, SectionStatus.IN_PROGRESS)
 
 		context = self.context_manager.get_context_for_section(section_config.name, section_config.depends_on)
+
+		if self.project_input:
+			input_context = self.parser.get_context_for_section(self.project_input, section_config.type)
+			context['input_context'] = input_context
 
 		logger.info(f'  Type: {section_config.type}')
 		logger.info(f'  Word count: {section_config.word_count["min"]}-{section_config.word_count["max"]}')
@@ -92,6 +103,11 @@ class Orchestrator:
 		# - Generate summary report
 
 		logger.info('✓ Paper generation complete!')
+
+	def load_input(self, input_file: Path):
+		logger.info(f'Loading input from: {input_file}')
+		self.project_input = self.parser.parse_file(input_file)
+		logger.info(f'Input loaded successfully: {self.project_input.title}')
 
 	def get_progress(self):
 		return self.state_manager.get_progress()

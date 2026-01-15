@@ -1,5 +1,6 @@
 import argparse
 import sys
+from pathlib import Path
 
 from dotenv import load_dotenv
 
@@ -11,6 +12,7 @@ def main():
 
 	parser = argparse.ArgumentParser(description='Schorlarly')
 	parser.add_argument('project_name', help='Name of your project')
+	parser.add_argument('--input', '-i', type=Path, help='Path to input markdown file')
 	parser.add_argument('--resume', action='store_true', help='Resume from last checkpoint')
 	parser.add_argument('--reset', action='store_true', help='Reset and start fresh')
 	parser.add_argument('--progress', action='store_true', help='Show current progress')
@@ -36,6 +38,18 @@ def main():
 		print(f'Current section: {progress["current_section"]}')
 		print(f'Failed sections: {progress["failed"]}')
 		return
+
+	if not args.resume and not args.input:
+		print('Error: --input is required for new generation')
+		print('Example: python main.py my_project --input input/my_input.md')
+		sys.exit(1)
+
+	if args.input:
+		try:
+			orchestrator.load_input(args.input)
+		except Exception as e:
+			print(f'Error loading input file: {e}')
+			sys.exit(1)
 
 	if args.resume:
 		print('Resuming paper generation...')
