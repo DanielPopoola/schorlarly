@@ -126,8 +126,11 @@ class WordExporter:
 	def _add_chapters(self, doc: Document):
 		for chapter_title, section_names in CHAPTER_STRUCTURE.items():
 			doc.add_page_break()
+
 			chapter_heading = doc.add_heading(chapter_title, 0)
 			chapter_heading.alignment = WD_ALIGN_PARAGRAPH.CENTER
+
+			doc.add_paragraph()
 
 			for section_name in section_names:
 				section_ctx = self.context_manager.get_section(section_name)
@@ -192,63 +195,82 @@ class WordExporter:
 				self._add_formatted_paragraph(doc, para_text)
 
 	def _process_tables(self, doc: Document, text: str) -> str:
-		table_pattern = r'\|(.+)\|[\r\n]+\|[\s:|-]+\|[\r\n]+((?:\|.+\|[\r\n]+)+)'
+		table_pattern = r'\|(.+?)\|[\r\n]+\|[\s:|-]+\|[\r\n]+((?:\|.+?\|[\r\n]*)+)'
 
 		def replace_table(match):
-			header_line = match.group(1)
-			body_lines = match.group(2)
-			headers = [cell.strip() for cell in header_line.split('|') if cell.strip()]
+			try:
+				header_line = match.group(1)
+				body_lines = match.group(2)
 
-			rows = []
-			for line in body_lines.strip().split('\n'):
-				if line.strip():
+				headers = [cell.strip() for cell in header_line.split('|') if cell.strip()]
+
+				if not headers:
+					return match.group(0)
+
+				rows = []
+				for line in body_lines.strip().split('\n'):
+					if not line.strip() or line.strip().startswith('|---'):
+						continue
+
 					cells = [cell.strip() for cell in line.split('|') if cell.strip()]
-					if cells:
+					if cells and len(cells) == len(headers):
 						rows.append(cells)
 
-			if not headers or not rows:
-				return match.group(0)  # Return original if parsing fails
+				if not rows:
+					return match.group(0)
 
-			table = doc.add_table(rows=len(rows) + 1, cols=len(headers))
-			table.style = 'Light Grid Accent 1'
+				table = doc.add_table(rows=len(rows) + 1, cols=len(headers))
+				table.style = 'Light Grid Accent 1'
 
-			for i, header in enumerate(headers):
-				cell = table.rows[0].cells[i]
-				cell.text = header
-				for paragraph in cell.paragraphs:
-					for run in paragraph.runs:
-						run.bold = True
+				for i, header in enumerate(headers):
+					cell = table.rows[0].cells[i]
+					cell.text = header
+					for paragraph in cell.paragraphs:
+						for run in paragraph.runs:
+							run.bold = True
 
-			for row_idx, row_data in enumerate(rows, start=1):
-				for col_idx, cell_data in enumerate(row_data):
-					if col_idx < len(headers):  # Safety check
+				for row_idx, row_data in enumerate(rows, start=1):
+					for col_idx, cell_data in enumerate(row_data):
 						table.rows[row_idx].cells[col_idx].text = cell_data
 
-			doc.add_paragraph()
-			return ''
+				doc.add_paragraph()
+				return ''
 
-		text = re.sub(table_pattern, replace_table, text)
+			except Exception as e:
+				logger.error(f'Table conversion failed: {e}')
+				return match.group(0)  # Return original on error
+
+		text = re.sub(table_pattern, replace_table, text, flags=re.MULTILINE)
 		return text
 
 	def _add_formatted_paragraph(self, doc: Document, text: str):
 		para = doc.add_paragraph()
 
-		parts = re.split(r'(\*\*.*?\*\*|\*.*?\*|`.*?`)', text)
+		pattern = r'(\*\*\*[^*]+\*\*\*|\*\*[^*]+\*\*|\*[^*]+\*|`[^`]+`)'
+		parts = re.split(pattern, text)
 
 		for part in parts:
 			if not part:
 				continue
 
-			if part.startswith('**') and part.endswith('**'):
+			if part.startswith('***') and part.endswith('***'):
+				run = para.add_run(part[3:-3])
+				run.bold = True
+				run.italic = True
+
+			elif part.startswith('**') and part.endswith('**'):
 				run = para.add_run(part[2:-2])
 				run.bold = True
-			elif part.startswith('*') and part.endswith('*'):
+
+			elif part.startswith('*') and part.endswith('*') and not part.startswith('**'):
 				run = para.add_run(part[1:-1])
 				run.italic = True
+
 			elif part.startswith('`') and part.endswith('`'):
 				run = para.add_run(part[1:-1])
 				run.font.name = 'Courier New'
 				run.font.size = Pt(10)
+
 			else:
 				para.add_run(part)
 
@@ -269,14 +291,24 @@ class WordExporter:
 				doc.add_paragraph(content, style='List Number')
 
 	def _add_code_block(self, doc: Document, text: str):
-		code = re.sub(r'^```\w*\n|```$', '', text, flags=re.MULTILINE)
+		code = re.sub(r'^```\w*\n?|```$', '', text, flags=re.MULTILINE).strip()
 
-		para = doc.add_paragraph(code.strip())
+		if not code:
+			return
+
+		para = doc.add_paragraph(code)
 		para.style = 'Normal'
 
 		for run in para.runs:
 			run.font.name = 'Courier New'
 			run.font.size = Pt(10)
+
+		from docx.oxml import OxmlElement
+		from docx.oxml.ns import qn
+
+		shading_elm = OxmlElement('w:shd')
+		shading_elm.set(qn('w:fill'), 'F0F0F0')
+		para._element.get_or_add_pPr().append(shading_elm)
 
 	def _add_references(self, doc: Document):
 		if not self.context_manager.all_citations:
@@ -306,8 +338,19 @@ class WordExporter:
 
 	def _extract_full_references(self) -> dict[str, str]:
 		references = {}
-		ref_pattern = r'(\[\d+\])\s+(.+?)(?=\[\d+\]|$)'
+		all_citations = set()
 
+		# Step 1: Collect all citation markers from all sections
+		for section_name in self.context_manager.section_order:
+			section_ctx = self.context_manager.get_section(section_name)
+			if not section_ctx:
+				continue
+
+			# Find all [N] patterns
+			citations = re.findall(r'\[(\d+)\]', section_ctx.content)
+			all_citations.update(citations)
+
+		# Step 2: Try to find full reference text for each citation
 		for section_name in self.context_manager.section_order:
 			section_ctx = self.context_manager.get_section(section_name)
 			if not section_ctx:
@@ -315,34 +358,24 @@ class WordExporter:
 
 			content = section_ctx.content
 
-			if 'references' in content.lower() or 'bibliography' in content.lower():
-				matches = re.finditer(ref_pattern, content, re.MULTILINE | re.DOTALL)
+			# Look for lines that start with [N] followed by reference text
+			# Example: [1] Author, "Title", Journal, Year
+			pattern = r'^\[(\d+)\]\s+(.+?)(?=^\[\d+\]|\Z)'
+			matches = re.finditer(pattern, content, re.MULTILINE | re.DOTALL)
 
-				for match in matches:
-					marker = match.group(1).strip()
-					reference_text = match.group(2).strip()
+			for match in matches:
+				num = match.group(1)
+				ref_text = match.group(2).strip()
 
-					reference_text = re.sub(r'\s+', ' ', reference_text)
-					reference_text = reference_text.rstrip('.,;')
+				ref_text = re.sub(r'\s+', ' ', ref_text)
 
-					if len(reference_text) > 20:  # Sanity check - must be substantial
-						references[marker] = f'{marker} {reference_text}'
+				if len(ref_text) > 20:
+					references[num] = f'[{num}] {ref_text}'
 
-		if not references:
-			for section_name in self.context_manager.section_order:
-				section_ctx = self.context_manager.get_section(section_name)
-				if not section_ctx:
-					continue
-
-				# Look for lines that look like references
-				lines = section_ctx.content.split('\n')
-				for line in lines:
-					# Match lines starting with [N] and containing typical reference elements
-					if re.match(r'\[\d+\].*?(?:et al\.|vol\.|pp\.|doi:|\d{4})', line, re.IGNORECASE):
-						marker_match = re.match(r'(\[\d+\])', line)
-						if marker_match:
-							marker = marker_match.group(1)
-							references[marker] = line.strip()
+		if all_citations and not references:
+			logger.warning('Citations found but no full references - creating placeholders')
+			for num in sorted(all_citations, key=int):
+				references[num] = f'[{num}] Reference details not available'
 
 		return references
 
