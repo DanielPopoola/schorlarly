@@ -82,9 +82,9 @@ class Orchestrator:
 		logger.info(f'  Context includes {len(context["previously_completed"])} previous sections')
 
 		generator = self.factory.get_generator(section_config.type)
-		section_context = generator.generate(section_config, self.project_input, context)
+		section = generator.generate(section_config, self.project_input, context)
 		# Add to context manager
-		self.context_manager.add_section(section_context)
+		self.context_manager.add_section(section)
 
 		# Mark as complete
 		self.state_manager.set_section_status(section_config.name, SectionStatus.COMPLETED)
@@ -105,7 +105,6 @@ class Orchestrator:
 			{'output': self.config.get_output_config(), 'citation': self.config.get_citation_config()},
 		)
 
-		# Export to Word
 		output_path = exporter.export(
 			project_name=self.project_name,
 			project_title=self.project_input.title if self.project_input else self.project_name,

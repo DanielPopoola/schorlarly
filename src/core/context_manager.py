@@ -45,20 +45,18 @@ class ContextManager:
 
 	def get_context_for_section(self, section_name: str, dependencies: list[str]) -> dict[str, Any]:
 		dependent_sections: dict[str, Any] = {}
-		context: dict[str, Any] = {
+		for dep_name in dependencies:
+			if dep_name in self.sections:
+				dependent_sections[dep_name] = {'name': dep_name}
+
+		return {
 			'section_name': section_name,
 			'previously_completed': self.section_order.copy(),
 			'dependent_sections': dependent_sections,
 			'all_citations_used': self.all_citations.copy(),
 			'all_terms_defined': self.all_terms_defined.copy(),
-			'key_points_covered': self._get_all_key_points(),
+			'key_points_covered': self._get_all_key_points()[:30],
 		}
-
-		for dep_name in dependencies:
-			if dep_name in self.sections:
-				dependent_sections[dep_name] = self.sections[dep_name].to_dict()
-
-		return context
 
 	def _get_all_key_points(self) -> list[str]:
 		all_points = []

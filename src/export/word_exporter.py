@@ -12,8 +12,48 @@ from src.core.context_manager import ContextManager
 logger = logging.getLogger(__name__)
 
 
+CHAPTER_STRUCTURE = {
+	'CHAPTER ONE: INTRODUCTION': [
+		'Introduction',
+		'Background to the Study',
+		'Statement of the Problem',
+		'Objective of the Study',
+		'Significance of the Study',
+		'Scope of the Study',
+		'Limitations',
+		'Organization of the Study',
+		'Definition of Terms',
+	],
+	'CHAPTER TWO: LITERATURE REVIEW': [
+		'Existing Approach to Problem Identified',
+		'Effort to counter/solve existing challenges',
+		'Specific Approach to Problem Identified',
+	],
+	'CHAPTER THREE: SYSTEM ANALYSIS AND DESIGN': [
+		'System Analysis',
+		'Method of Data Collection',
+		'Problem of the Current System',
+		'Objective of the new system',
+		'Menu Specification',
+		'Overview of the System Flowchart',
+		'System Design',
+		'Procedural Flowchart',
+	],
+	'CHAPTER FOUR: SYSTEM IMPLEMENTATION AND DOCUMENTATION': [
+		'System Implementation',
+		'System Requirement',
+		'Hardware Requirement',
+		'Software Requirement',
+		'Test-Run',
+		'Program Documentation',
+		'User Manual',
+		'System Maintenance',
+	],
+	'CHAPTER FIVE: SUMMARY, CONCLUSION AND RECOMMENDATION': ['Summary', 'Conclusion', 'Recommendations'],
+}
+
+
 def create_word_exporter_from_config(context_manager: ContextManager, config: dict) -> 'WordExporter':
-	"""Factory function for creating exporter"""
 	output_config = config.get('output', {})
 	citation_config = config.get('citation', {})
 
@@ -27,6 +67,7 @@ class WordExporter:
 		self.context_manager = context_manager
 		self.output_dir = Path(config.get('final_dir', 'output/final'))
 		self.citation_style = config.get('citation', {}).get('style', 'IEEE')
+		self.references_seen = set()
 
 	def export(self, project_name: str, project_title: str, author: str) -> Path:
 		logger.info(f'Exporting paper to Word: {project_name}')
@@ -34,7 +75,7 @@ class WordExporter:
 		doc = Document()
 		self._setup_document_style(doc)
 		self._add_title_page(doc, project_title, author)
-		self._add_sections(doc)
+		self._add_chapters(doc)
 		self._add_references(doc)
 
 		self.output_dir.mkdir(parents=True, exist_ok=True)
@@ -63,12 +104,9 @@ class WordExporter:
 			section.right_margin = Inches(1)
 
 	def _add_title_page(self, doc: Document, title: str, author: str):
-		"""Create title page"""
-		# Add some space
 		for _ in range(6):
 			doc.add_paragraph()
 
-		# Title (centered, large)
 		title_para = doc.add_heading(title, 0)
 		title_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
 
@@ -78,36 +116,65 @@ class WordExporter:
 		author_para = doc.add_paragraph(f'By\n{author}')
 		author_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
 
-		doc.add_paragraph()  # Space
+		doc.add_paragraph()
 
-		# Date (centered)
 		date_para = doc.add_paragraph(datetime.now().strftime('%B %Y'))
 		date_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
 
-		# Page break after title page
 		doc.add_page_break()
 
-	def _add_sections(self, doc: Document):
-		"""Add all sections in order"""
-		for section_name in self.context_manager.section_order:
-			section_ctx = self.context_manager.get_section(section_name)
-			if not section_ctx:
+	def _add_chapters(self, doc: Document):
+		for chapter_title, section_names in CHAPTER_STRUCTURE.items():
+			doc.add_page_break()
+			chapter_heading = doc.add_heading(chapter_title, 0)
+			chapter_heading.alignment = WD_ALIGN_PARAGRAPH.CENTER
+
+			for section_name in section_names:
+				section_ctx = self.context_manager.get_section(section_name)
+				if not section_ctx:
+					logger.warning(f'Section not found: {section_name}')
+					continue
+
+				logger.debug(f'Adding section: {section_name}')
+
+				doc.add_heading(section_name, 1)
+
+				cleaned_content = self._remove_embedded_references(section_ctx.content)
+
+				self._add_markdown_content(doc, cleaned_content)
+
+				doc.add_paragraph()
+
+	def _remove_embedded_references(self, content: str) -> str:
+		ref_header_pattern = r'(?:^|\n)#{1,3}\s*References?\s*\n'
+
+		match = re.search(ref_header_pattern, content, re.IGNORECASE | re.MULTILINE)
+		if match:
+			self.references_seen.add(True)
+			return content[: match.start()].rstrip()
+
+		lines = content.split('\n')
+		cleaned_lines = []
+		in_reference_list = False
+
+		for line in lines:
+			if re.match(r'^\[\d+\]\s+[A-Z]', line.strip()):
+				in_reference_list = True
+				self.references_seen.add(True)
 				continue
 
-			logger.debug(f'Adding section: {section_name}')
+			if in_reference_list:
+				if re.match(r'^\[\d+\]|^\s+[a-z]', line.strip()):
+					continue
+				else:
+					in_reference_list = False
 
-			# Section heading
-			doc.add_heading(section_name, 1)
+			cleaned_lines.append(line)
 
-			# Convert markdown content to Word
-			self._add_markdown_content(doc, section_ctx.content)
-
-			# Small space after section
-			doc.add_paragraph()
+		return '\n'.join(cleaned_lines)
 
 	def _add_markdown_content(self, doc: Document, markdown_text: str):
-		"""Convert markdown to Word formatting"""
-		# Split into paragraphs
+		markdown_text = self._process_tables(doc, markdown_text)
 		paragraphs = markdown_text.split('\n\n')
 
 		for para_text in paragraphs:
@@ -115,7 +182,6 @@ class WordExporter:
 			if not para_text:
 				continue
 
-			# Check if it's a list
 			if para_text.startswith('- ') or para_text.startswith('* '):
 				self._add_bullet_list(doc, para_text)
 			elif re.match(r'^\d+\.', para_text):
@@ -125,11 +191,48 @@ class WordExporter:
 			else:
 				self._add_formatted_paragraph(doc, para_text)
 
+	def _process_tables(self, doc: Document, text: str) -> str:
+		table_pattern = r'\|(.+)\|[\r\n]+\|[\s:|-]+\|[\r\n]+((?:\|.+\|[\r\n]+)+)'
+
+		def replace_table(match):
+			header_line = match.group(1)
+			body_lines = match.group(2)
+			headers = [cell.strip() for cell in header_line.split('|') if cell.strip()]
+
+			rows = []
+			for line in body_lines.strip().split('\n'):
+				if line.strip():
+					cells = [cell.strip() for cell in line.split('|') if cell.strip()]
+					if cells:
+						rows.append(cells)
+
+			if not headers or not rows:
+				return match.group(0)  # Return original if parsing fails
+
+			table = doc.add_table(rows=len(rows) + 1, cols=len(headers))
+			table.style = 'Light Grid Accent 1'
+
+			for i, header in enumerate(headers):
+				cell = table.rows[0].cells[i]
+				cell.text = header
+				for paragraph in cell.paragraphs:
+					for run in paragraph.runs:
+						run.bold = True
+
+			for row_idx, row_data in enumerate(rows, start=1):
+				for col_idx, cell_data in enumerate(row_data):
+					if col_idx < len(headers):  # Safety check
+						table.rows[row_idx].cells[col_idx].text = cell_data
+
+			doc.add_paragraph()
+			return ''
+
+		text = re.sub(table_pattern, replace_table, text)
+		return text
+
 	def _add_formatted_paragraph(self, doc: Document, text: str):
-		"""Add paragraph with inline formatting (bold, italic, code)"""
 		para = doc.add_paragraph()
 
-		# Split by formatting markers
 		parts = re.split(r'(\*\*.*?\*\*|\*.*?\*|`.*?`)', text)
 
 		for part in parts:
@@ -137,24 +240,19 @@ class WordExporter:
 				continue
 
 			if part.startswith('**') and part.endswith('**'):
-				# Bold
 				run = para.add_run(part[2:-2])
 				run.bold = True
 			elif part.startswith('*') and part.endswith('*'):
-				# Italic
 				run = para.add_run(part[1:-1])
 				run.italic = True
 			elif part.startswith('`') and part.endswith('`'):
-				# Code (monospace)
 				run = para.add_run(part[1:-1])
 				run.font.name = 'Courier New'
 				run.font.size = Pt(10)
 			else:
-				# Normal text
 				para.add_run(part)
 
 	def _add_bullet_list(self, doc: Document, text: str):
-		"""Add bulleted list"""
 		lines = text.split('\n')
 		for line in lines:
 			line = line.strip()
@@ -163,7 +261,6 @@ class WordExporter:
 				doc.add_paragraph(content, style='List Bullet')
 
 	def _add_numbered_list(self, doc: Document, text: str):
-		"""Add numbered list"""
 		lines = text.split('\n')
 		for line in lines:
 			line = line.strip()
@@ -172,33 +269,84 @@ class WordExporter:
 				doc.add_paragraph(content, style='List Number')
 
 	def _add_code_block(self, doc: Document, text: str):
-		"""Add code block"""
-		# Remove markdown code fence
 		code = re.sub(r'^```\w*\n|```$', '', text, flags=re.MULTILINE)
 
 		para = doc.add_paragraph(code.strip())
 		para.style = 'Normal'
 
-		# Format as code
 		for run in para.runs:
 			run.font.name = 'Courier New'
 			run.font.size = Pt(10)
 
-		# Light gray background (if possible)
-		# Note: python-docx has limited background color support
-
 	def _add_references(self, doc: Document):
-		"""Add references section"""
 		if not self.context_manager.all_citations:
 			logger.info('No citations to add')
 			return
 
 		doc.add_page_break()
-		doc.add_heading('References', 1)
+		ref_heading = doc.add_heading('REFERENCES', 0)
+		ref_heading.alignment = WD_ALIGN_PARAGRAPH.CENTER
 
-		unique_citations = sorted(set(self.context_manager.all_citations))
+		full_references = self._extract_full_references()
 
-		for citation in unique_citations:
-			doc.add_paragraph(citation, style='Normal')
+		if not full_references:
+			logger.warning('No full references found, using citation markers only')
+			unique_citations = sorted(set(self.context_manager.all_citations))
+			for citation in unique_citations:
+				doc.add_paragraph(f'{citation} [Reference details not available]', style='Normal')
+		else:
+			sorted_refs = sorted(full_references.items(), key=lambda x: self._extract_citation_number(x[0]))
 
-		logger.info(f'Added {len(unique_citations)} citations')
+			for _, reference in sorted_refs:
+				doc.add_paragraph(reference, style='Normal')
+
+		logger.info(
+			f'Added {len(full_references) if full_references else len(self.context_manager.all_citations)} citations'
+		)
+
+	def _extract_full_references(self) -> dict[str, str]:
+		references = {}
+		ref_pattern = r'(\[\d+\])\s+(.+?)(?=\[\d+\]|$)'
+
+		for section_name in self.context_manager.section_order:
+			section_ctx = self.context_manager.get_section(section_name)
+			if not section_ctx:
+				continue
+
+			content = section_ctx.content
+
+			if 'references' in content.lower() or 'bibliography' in content.lower():
+				matches = re.finditer(ref_pattern, content, re.MULTILINE | re.DOTALL)
+
+				for match in matches:
+					marker = match.group(1).strip()
+					reference_text = match.group(2).strip()
+
+					reference_text = re.sub(r'\s+', ' ', reference_text)
+					reference_text = reference_text.rstrip('.,;')
+
+					if len(reference_text) > 20:  # Sanity check - must be substantial
+						references[marker] = f'{marker} {reference_text}'
+
+		if not references:
+			for section_name in self.context_manager.section_order:
+				section_ctx = self.context_manager.get_section(section_name)
+				if not section_ctx:
+					continue
+
+				# Look for lines that look like references
+				lines = section_ctx.content.split('\n')
+				for line in lines:
+					# Match lines starting with [N] and containing typical reference elements
+					if re.match(r'\[\d+\].*?(?:et al\.|vol\.|pp\.|doi:|\d{4})', line, re.IGNORECASE):
+						marker_match = re.match(r'(\[\d+\])', line)
+						if marker_match:
+							marker = marker_match.group(1)
+							references[marker] = line.strip()
+
+		return references
+
+	def _extract_citation_number(self, marker: str) -> int:
+		"""Extract numeric value from citation marker like [1]"""
+		match = re.search(r'\[(\d+)\]', marker)
+		return int(match.group(1)) if match else 999

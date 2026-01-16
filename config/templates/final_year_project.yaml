@@ -138,6 +138,13 @@ sections:
       min: 300
       max: 500
     depends_on: ["System Analysis"]
+
+  - name: "System Design"
+    type: "evidence"
+    word_count:
+      min: 500
+      max: 1000
+    depends_on: ["System Analysis"]
     
   - name: "Procedural Flowchart"
     type: "evidence"
@@ -145,13 +152,6 @@ sections:
       min: 200
       max: 400
     depends_on: ["Overview of the System Flowchart"]
-    
-  - name: "System Design"
-    type: "evidence"
-    word_count:
-      min: 500
-      max: 1000
-    depends_on: ["System Analysis"]
     
   - name: "System Implementation"
     type: "evidence"
@@ -182,7 +182,7 @@ sections:
       max: 300
     depends_on: ["System Requirement"]
     
-  - name: "Test-Run"
+  - name: "System Test-Run"
     type: "evidence"
     word_count:
       min: 600
