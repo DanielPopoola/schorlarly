@@ -41,7 +41,7 @@ class SynthesisSectionGenerator(BaseGenerator):
 			)
 			word_count = self._count_words(content)
 
-		key_points = self._extract_key_points(content)
+		key_points = self._extract_key_points_local(content)
 		citations = self._extract_citations(content)
 
 		logger.info(f'Generated {word_count} words summarizing {len(completed_sections)} sections')

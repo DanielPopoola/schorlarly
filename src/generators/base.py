@@ -66,6 +66,41 @@ FORMAT:
 			paragraphs = content.split('\n\n')
 			return [p.split('.')[0] for p in paragraphs[:5] if p.strip()]
 
+	def _extract_key_points_local(self, content: str) -> list[str]:
+		# Try paragraph-based extraction first
+		paragraphs = [p.strip() for p in content.split('\n\n') if len(p.strip()) > 50]
+
+		if len(paragraphs) < 3:  # Not enough clear paragraphs
+			# Fallback: split by sentences
+			sentences = re.split(r'[.!?]+\s+', content)
+			paragraphs = [s.strip() for s in sentences if len(s.split()) > 10]
+
+		key_points = []
+
+		for para in paragraphs[:7]:
+			first_sentence = para.split('.')[0]
+			if len(first_sentence.split()) > 5:
+				key_points.append(first_sentence.strip())
+
+		if len(key_points) < 3:
+			result_sentences = [s for s in paragraphs if re.search(r'\d+%|\d+\.\d+|achieved|demonstrated|showed', s)]
+			key_points.extend([s.split('.')[0] for s in result_sentences[:3]])
+
+		return key_points[:5] if key_points else ['Content generated successfully']
+
+	def _parse_combined_response(self, content: str) -> tuple[str, list[str]]:
+		"""Parse content and key points from a combined LLM response."""
+		if '---KEY_POINTS---' in content:
+			parts = content.split('---KEY_POINTS---')
+			actual_content = parts[0].strip()
+			key_points_text = parts[1].strip()
+			key_points = [
+				line.strip('- ').strip() for line in key_points_text.split('\n') if line.strip().startswith('-')
+			]
+			return actual_content, key_points
+
+		return content, self._extract_key_points_local(content)
+
 	def _extract_citations(self, content: str) -> list[str]:
 		ieee_pattern = r'\[\d+\]'
 		apa_pattern = r'\([A-Z][a-z]+,?\s+\d{4}\)'

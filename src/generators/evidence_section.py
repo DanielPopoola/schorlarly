@@ -33,9 +33,11 @@ class EvidenceSectionGenerator(BaseGenerator):
 		full_prompt = base_prompt + evidence_prompt
 
 		# Generate
-		content = self.llm_client.generate(
+		content_raw = self.llm_client.generate(
 			full_prompt, temperature=0.6, max_tokens=section_config.word_count['max'] * 2
 		)
+
+		content, key_points = self._parse_combined_response(content_raw)
 
 		# Adjust word count if needed
 		valid, word_count = self._validate_word_count(
@@ -47,9 +49,9 @@ class EvidenceSectionGenerator(BaseGenerator):
 				content, section_config.word_count['min'], section_config.word_count['max'], section_config.name
 			)
 			word_count = self._count_words(content)
+			_, key_points = self._parse_combined_response(content)
 
 		# Extract metadata
-		key_points = self._extract_key_points(content)
 		citations = self._extract_citations(content)
 
 		logger.info(f'Generated {word_count} words with {len(key_points)} key points')
@@ -216,5 +218,14 @@ Focus on helping future developers understand the code."""
 {evidence}
 
 Maintain academic formal tone."""
+
+		prompt += """
+
+After writing, extract 3-5 KEY POINTS in this format:
+
+---KEY_POINTS---
+- First key insight
+- Second key insight
+..."""
 
 		return prompt

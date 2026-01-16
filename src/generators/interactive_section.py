@@ -85,9 +85,11 @@ class InteractiveSectionGenerator(BaseGenerator):
 
 		full_prompt = base_prompt + interactive_prompt
 
-		content = self.llm_client.generate(
+		content_raw = self.llm_client.generate(
 			full_prompt, temperature=0.7, max_tokens=section_config.word_count['max'] * 2
 		)
+
+		content, key_points = self._parse_combined_response(content_raw)
 
 		valid, word_count = self._validate_word_count(
 			content, section_config.word_count['min'], section_config.word_count['max']
@@ -98,8 +100,9 @@ class InteractiveSectionGenerator(BaseGenerator):
 				content, section_config.word_count['min'], section_config.word_count['max'], section_config.name
 			)
 			word_count = self._count_words(content)
+			# Re-extract key points if content changed significantly
+			_, key_points = self._parse_combined_response(content)
 
-		key_points = self._extract_key_points(content)
 		citations = self._extract_citations(content)
 
 		logger.info(f'Generated {word_count} words')
@@ -236,6 +239,13 @@ This is the opening of the paper - make it compelling but academic."""
 USER INPUT:
 {user_content}
 
-Write the section now:"""
+Write the section now.
+
+After writing, extract 3-5 KEY POINTS in this format:
+
+---KEY_POINTS---
+- First key insight
+- Second key insight
+..."""
 
 		return prompt

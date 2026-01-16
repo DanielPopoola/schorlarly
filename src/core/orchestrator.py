@@ -1,4 +1,5 @@
 import logging
+import time
 from pathlib import Path
 
 from src.core.config_loader import SectionConfig, get_config
@@ -82,9 +83,21 @@ class Orchestrator:
 		logger.info(f'  Context includes {len(context["previously_completed"])} previous sections')
 
 		generator = self.factory.get_generator(section_config.type)
+		logger.info(f'=== Generating: {section_config.name} ===')
+		start_time = time.time()
+		start_tokens = self.llm_client.get_usage_stats()
 		section = generator.generate(section_config, self.project_input, context)
 		# Add to context manager
 		self.context_manager.add_section(section)
+		end_time = time.time()
+		end_tokens = self.llm_client.get_usage_stats()
+
+		logger.info(f'Section completed in {end_time - start_time:.2f}s')
+		logger.info(
+			f'Tokens used: input={end_tokens["input_tokens"] - start_tokens["input_tokens"]}, '
+			f'output={end_tokens["output_tokens"] - start_tokens["output_tokens"]}'
+		)
+		logger.info(f'Total so far: {end_tokens["total_tokens"]} tokens')
 
 		# Mark as complete
 		self.state_manager.set_section_status(section_config.name, SectionStatus.COMPLETED)

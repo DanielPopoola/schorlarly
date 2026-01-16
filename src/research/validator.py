@@ -1,3 +1,4 @@
+import json
 import logging
 import re
 from dataclasses import dataclass
@@ -113,17 +114,110 @@ Just output the number, nothing else."""
 			return 0.5
 
 	def validate_batch(self, papers: list[Paper], domain_keywords: list[str]) -> dict[str, ValidationResult]:
-		results = {}
+		batch_size = 10
+		all_results = {}
 
-		for paper in papers:
-			key = paper.url or paper.title
-			results[key] = self.validate(paper, domain_keywords)
+		for i in range(0, len(papers), batch_size):
+			batch = papers[i : i + batch_size]
+			logger.info(f'Validating batch of {len(batch)} papers...')
 
-		# Log summary
-		accepted = sum(1 for r in results.values() if r.status == 'accepted')
-		flagged = sum(1 for r in results.values() if r.status == 'flagged')
-		rejected = sum(1 for r in results.values() if r.status == 'rejected')
+			batch_scores = self._validate_relevance_batch(batch, domain_keywords)
 
-		logger.info(f'Batch validation: {accepted} accepted, {flagged} flagged, {rejected} rejected')
+			for paper in batch:
+				key = paper.url or paper.title
+				score = batch_scores.get(key)
+				if score is None:
+					logger.debug(f'Individual validation for: {paper.title[:50]}...')
+					score = self._validate_relevance(paper, domain_keywords)
 
-		return results
+				exists = self._validate_existence(paper)
+
+				if not exists:
+					all_results[key] = ValidationResult(
+						exists=False, relevance_score=0.0, status='rejected', reason='Paper not found'
+					)
+					continue
+
+				if score >= self.auto_accept:
+					status = 'accepted'
+					reason = f'High relevance ({score:.2f})'
+				elif score >= self.min_relevance:
+					status = 'flagged'
+					reason = f'Moderate relevance ({score:.2f}) - review recommended'
+				else:
+					status = 'rejected'
+					reason = f'Low relevance ({score:.2f})'
+
+				result = ValidationResult(exists=True, relevance_score=score, status=status, reason=reason)
+
+				self.cache[key] = result
+				all_results[key] = result
+
+		accepted = sum(1 for r in all_results.values() if r.status == 'accepted')
+		flagged = sum(1 for r in all_results.values() if r.status == 'flagged')
+		rejected = sum(1 for r in all_results.values() if r.status == 'rejected')
+
+		logger.info(f'Batch validation complete: {accepted} accepted, {flagged} flagged, {rejected} rejected')
+		return all_results
+
+	def _build_batch_validation_prompt(self, papers: list[Paper], domain_keywords: list[str]) -> str:
+		"""Build a prompt that asks LLM to score multiple papers at once"""
+
+		keywords_str = ', '.join(domain_keywords)
+
+		papers_text = []
+		for i, paper in enumerate(papers, 1):
+			papers_text.append(f"""Paper {i}:
+	Title: {paper.title}
+	Abstract: {paper.abstract[:500]}""")
+
+		papers_section = '\n\n'.join(papers_text)
+
+		prompt = f"""Rate the relevance of each paper to the domain: {keywords_str}
+
+	{papers_section}
+
+	For each paper, provide a relevance score between 0.0 and 1.0:
+	- 0.0 = completely irrelevant
+	- 0.5 = somewhat relevant
+	- 1.0 = highly relevant
+
+	Respond with ONLY a JSON object in this exact format:
+	{{
+	"paper_1": 0.85,
+	"paper_2": 0.42,
+	"paper_3": 0.67
+	}}
+
+	NO EXPLANATION, just the JSON."""
+
+		return prompt
+
+	def _validate_relevance_batch(self, papers: list[Paper], domain_keywords: list[str]) -> dict[str, float]:
+		prompt = self._build_batch_validation_prompt(papers, domain_keywords)
+
+		try:
+			response = self.llm_client.generate(prompt, temperature=0.1, max_tokens=500)
+
+			response_clean = response.strip()
+
+			if response_clean.startswith('```'):
+				response_clean = re.sub(r'^```json?\s*|\s*```$', '', response_clean, flags=re.MULTILINE)
+
+			scores = json.loads(response_clean)
+
+			results = {}
+			for i, paper in enumerate(papers, 1):
+				key = f'paper_{i}'
+				if key in scores:
+					score = float(scores[key])
+					results[paper.url or paper.title] = max(0.0, min(1.0, score))
+				else:
+					logger.warning(f'Missing score for {key}, will validate individually')
+					results[paper.url or paper.title] = None  # Mark for re-validation
+
+			return results
+
+		except (json.JSONDecodeError, KeyError, ValueError) as e:
+			logger.error(f'Batch validation parsing failed: {e}')
+			return {}

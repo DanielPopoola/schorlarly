@@ -70,7 +70,7 @@ class ResearchSectionGenerator(BaseGenerator):
 			)
 			word_count = self._count_words(content)
 
-		key_points = self._extract_key_points(content)
+		key_points = self._extract_key_points_local(content)
 		citations = self._extract_citations(content)
 
 		logger.info(f'Generated {word_count} words, {len(key_points)} key points, {len(citations)} citations')
