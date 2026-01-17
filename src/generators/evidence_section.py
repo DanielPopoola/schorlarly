@@ -1,4 +1,5 @@
 import logging
+import re
 from typing import Any
 
 from src.core.config_loader import SectionConfig
@@ -53,8 +54,24 @@ class EvidenceSectionGenerator(BaseGenerator):
 
 		# Extract metadata
 		citations = self._extract_citations(content)
-
 		logger.info(f'Generated {word_count} words with {len(key_points)} key points')
+
+		diagrams = []
+		if hasattr(section_config, 'diagrams') and section_config.diagrams:
+			for diagram_spec in section_config.diagrams:
+				diagram_code = self._generate_diagram(
+					diagram_spec['type'],
+					diagram_spec['description'],
+					user_input,
+					content,  # The already-generated text content
+				)
+				diagrams.append(
+					{
+						'type': diagram_spec['type'],
+						'code': diagram_code,
+						'caption': f'Figure: {diagram_spec["description"]}',
+					}
+				)
 
 		return SectionContext(
 			name=section_config.name,
@@ -63,6 +80,7 @@ class EvidenceSectionGenerator(BaseGenerator):
 			citations=citations,
 			word_count=word_count,
 			terms_defined=[],
+			diagrams=diagrams,
 		)
 
 	def _extract_evidence(self, section_name: str, user_input: ProjectInput) -> str:
@@ -122,6 +140,98 @@ ARCHITECTURE:
 			return f"""SOLUTION: {user_input.solution}
 ARCHITECTURE: {user_input.system_architecture}
 IMPLEMENTATION: {user_input.implementation_highlights}"""
+
+	def _generate_diagram(self, diagram_type: str, description: str, user_input, text_content: str):
+		"""Generate Mermaid diagram code using LLM"""
+
+		if diagram_type == 'architecture':
+			prompt = f"""Generate a Mermaid architecture diagram for this system.
+
+	SYSTEM DESCRIPTION:
+	{user_input.system_architecture[:500]}
+
+	ADDITIONAL CONTEXT:
+	{text_content[:500]}
+
+	Generate ONLY valid Mermaid code using this structure:
+	```mermaid
+	graph TB
+		subgraph "Layer Name"
+			ComponentA[Component A]
+			ComponentB[Component B]
+		end
+		
+		subgraph "Another Layer"
+			ComponentC[Component C]
+		end
+		
+		ComponentA --> ComponentC
+	```
+
+	CRITICAL RULES:
+	- Use graph TB (top-to-bottom) or LR (left-to-right)
+	- Use subgraphs for layers
+	- Use --> for connections
+	- Keep it simple (max 10 components)
+	- Output ONLY the mermaid code, no explanations
+
+	Generate the diagram:"""
+
+		elif diagram_type == 'flowchart':
+			prompt = f"""Generate a Mermaid flowchart for this process.
+
+	PROCESS DESCRIPTION:
+	{text_content[:500]}
+
+	Use this Mermaid format:
+	```mermaid
+	flowchart TD
+		Start([Start])
+		Step1[Step description]
+		Decision{{Decision?}}
+		
+		Start --> Step1
+		Step1 --> Decision
+		Decision -->|Yes| Step2
+		Decision -->|No| Step3
+	```
+
+	Rules:
+	- Use ([]) for start/end
+	- Use [] for processes
+	- Use {{}} for decisions
+	- Use -->|label| for conditional paths
+
+	Generate the flowchart:"""
+
+		else:
+			raise ValueError(f'Unknown diagram type: {diagram_type}')
+
+		response = self.llm_client.generate(prompt, temperature=0.3, max_tokens=1000)
+
+		# Extract mermaid code from response
+		mermaid_code = self._extract_mermaid_code(response)
+
+		return mermaid_code
+
+	def _extract_mermaid_code(self, response: str) -> str:
+		"""Extract clean Mermaid code from LLM response"""
+
+		# Try to find code within ```mermaid ... ``` fences
+		match = re.search(r'```mermaid\s*(.*?)\s*```', response, re.DOTALL)
+
+		if match:
+			return match.group(1).strip()
+
+		# Fallback: look for graph/flowchart keywords
+		match = re.search(r'(graph|flowchart)\s+(TB|LR|TD).*', response, re.DOTALL)
+
+		if match:
+			return match.group(0).strip()
+
+		# Last resort: return as-is and hope for the best
+		logger.warning('Could not extract Mermaid code properly, using raw response')
+		return response.strip()
 
 	def _handle_code_section(self, section_name: str, user_input: ProjectInput) -> str | None:
 		"""For code-required sections, use implementation highlights or prompt user"""

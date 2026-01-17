@@ -29,8 +29,8 @@ citation:
   validation:
     existence_check: true
     relevance_check: true
-    min_relevance_score: 0.3
-    auto_accept_score: 0.7
+    min_relevance_score: 0.2
+    auto_accept_score: 0.6
 
 # Writing Style
 writing:

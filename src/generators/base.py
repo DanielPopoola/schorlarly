@@ -31,8 +31,23 @@ class BaseGenerator(ABC):
 
 		covered = context.get('key_points_covered', [])
 		covered_str = '\n- '.join(covered[:10]) if covered else 'None yet'
+		if citation_style == 'IEEE':
+			citation_example = """
+	Use numbered citations like this:
+	- In text: "Recent studies show that blockchain improves security [1]."
+	- Do NOT use (Author, Year) format.
+	"""
+		else:  # APA
+			citation_example = """
+	Use author-year citations like this:
+	- In text: "Recent studies (Smith, 2020) show..."
+	- Do NOT use [1], [2] format.
+	"""
 
 		prompt = f"""You are writing an academic {section_config.name} section.
+
+CITATION RULES:
+{citation_example}
 
 REQUIREMENTS:
 - Writing tone: {tone}
@@ -43,6 +58,7 @@ REQUIREMENTS:
 ALREADY COVERED (do NOT repeat these):
 - {covered_str}
 
+CRITICAL: Be absolutely consistent. Do not mix citation styles.
 """
 		return prompt
 
@@ -118,6 +134,24 @@ FORMAT:
 		count = self._count_words(content)
 		valid = min_words <= count <= max_words
 		return valid, count
+
+	def _validate_english_only(self, text: str) -> str:
+		"""Remove or flag non-English characters"""
+		# Detect non-ASCII characters (excluding common punctuation)
+		non_ascii = re.findall(r'[^\x00-\x7F]+', text)
+
+		if non_ascii:
+			logger.warning(f'Non-English characters detected: {non_ascii}')
+
+			# Option 1: Remove them
+			cleaned = re.sub(r'[^\x00-\x7F]+', '', text)
+
+			# Option 2: Replace with placeholder
+			# cleaned = re.sub(r'[^\x00-\x7F]+', '[TRANSLATION NEEDED]', text)
+
+			return cleaned
+
+		return text
 
 	def _adjust_content_length(self, content: str, target_min: int, target_max: int, section_name: str) -> str:
 		current_count = self._count_words(content)

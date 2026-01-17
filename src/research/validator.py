@@ -105,6 +105,12 @@ Just output the number, nothing else."""
 			score_match = re.search(r'0?\.\d+|[01]\.?\d*', score_str)
 			if score_match:
 				score = float(score_match.group())
+				if score < self.min_relevance:
+					logger.debug(f'REJECTED (score={score:.2f}): {paper.title[:60]}...')
+				elif score >= self.auto_accept:
+					logger.info(f'ACCEPTED (score={score:.2f}): {paper.title[:60]}...')
+				else:
+					logger.info(f'FLAGGED (score={score:.2f}): {paper.title[:60]}...')
 				return max(0.0, min(1.0, score))  # Clamp to [0, 1]
 
 			logger.warning(f'Could not parse relevance score: {response}')

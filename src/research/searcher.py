@@ -110,9 +110,22 @@ class ResearchSearcher:
 		)
 		self.fallback = ArXivSearcher()
 		self.max_results = primary_config.get('max_results', 20)
+		self.search_cache: dict[str, list[Paper]] = {}
+		self.failed_queries: set[str] = set()
 
 	def search(self, query: str, max_results: int | None = None) -> list[Paper]:
 		max_results = max_results or self.max_results
+		cache_key = f'{query}:{max_results}'
+
+		# Check if this query already failed validation
+		if cache_key in self.failed_queries:
+			logger.warning(f'Skipping search - previous query yielded 0 valid papers: {query[:50]}...')
+			return []
+
+		if cache_key in self.search_cache:
+			logger.info(f'Using cached search results for: {query[:50]}...')
+			return self.search_cache[cache_key]
+
 		papers = []
 
 		if self.primary:
@@ -129,7 +142,11 @@ class ResearchSearcher:
 			papers.extend(fallback_papers)
 
 		papers = self._deduplicate(papers)
-		return papers[:max_results]
+		results = papers[:max_results]
+
+		self.search_cache[cache_key] = results
+		logger.info(f'Cached search results for: {query[:50]}...')
+		return results
 
 	def _deduplicate(self, papers: list[Paper]) -> list[Paper]:
 		seen_titles = set()
@@ -156,3 +173,9 @@ class ResearchSearcher:
 			query = query[:100].rsplit(' ', 1)[0]
 
 		return query
+
+	def mark_query_failed(self, query: str, max_results: int):
+		"""Mark a query as having failed validation"""
+		cache_key = f'{query}:{max_results}'
+		self.failed_queries.add(cache_key)
+		logger.info(f'Marked query as failed: {query[:50]}...')

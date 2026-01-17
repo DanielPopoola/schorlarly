@@ -72,6 +72,11 @@ class Orchestrator:
 		self.state_manager.set_section_status(section_config.name, SectionStatus.IN_PROGRESS)
 
 		context = self.context_manager.get_context_for_section(section_config.name, section_config.depends_on)
+		for dep in section_config.depends_on:
+			dep_status = self.state_manager.get_section_status(dep)
+			if dep_status != SectionStatus.COMPLETED:
+				logger.error(f'Cannot generate "{section_config.name}" - dependency "{dep}" not completed')
+				raise ValueError(f'Dependency not met: {dep}')
 
 		if self.project_input:
 			input_context = self.parser.get_context_for_section(self.project_input, section_config.type)

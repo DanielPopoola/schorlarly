@@ -3,6 +3,7 @@ from typing import Any
 
 from src.core.config_loader import SectionConfig
 from src.core.context_manager import SectionContext
+from src.export.word_exporter import CHAPTER_STRUCTURE
 from src.generators.base import BaseGenerator
 from src.parsers.input_parser import ProjectInput
 
@@ -90,6 +91,8 @@ class AutomatedSectionGenerator(BaseGenerator):
 		prompt = f"""Generate definitions for these technical terms. Define each term in 1-2 sentences in formal
 			academic style.
 
+	CRITICAL: Output ONLY the definitions in this exact format. No preamble, no "Here is...", no word counts.
+
 	TERMS TO DEFINE:
 	{', '.join(terms)}
 
@@ -110,16 +113,17 @@ class AutomatedSectionGenerator(BaseGenerator):
 		return self.llm_client.generate(prompt, temperature=0.5, max_tokens=1000)
 
 	def _generate_organization(self, context: dict[str, Any]) -> str:
-		completed_sections = context.get('previously_completed', [])
-		sections_text = '\n'.join([f'- {section}' for section in completed_sections])
+		num_chapters = len(CHAPTER_STRUCTURE)
 
 		prompt = f"""Write the "Organization of the Study" section describing the paper structure.
 
-	SECTIONS IN THIS PAPER:
-	{sections_text}
+	CRITICAL: Output ONLY the organization of study in this exact format. 
+	No preamble, no "Here is...", no word counts.
 
-	Write a paragraph describing how the paper is organized, mentioning what each major section covers. Keep it brief
-	and formal.
+	This paper is structured into {num_chapters} chapters:
+	{chr(10).join([f'- {chapter}' for chapter in CHAPTER_STRUCTURE])}
+
+	Describe what each chapter covers.
 
 	Write now:
 

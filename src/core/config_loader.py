@@ -15,6 +15,7 @@ class SectionConfig:
 	depends_on: list[str]
 	research: dict[str, Any] | None = None
 	code_required: bool = False
+	diagrams: list[dict] | None = None
 
 
 class ConfigLoader:

@@ -12,12 +12,15 @@ class SectionContext:
 	citations: list[str]
 	word_count: int
 	terms_defined: list[str] | None = None
+	diagrams: list[dict] | None = None
 
 	def to_dict(self) -> dict[str, Any]:
 		return asdict(self)
 
 	@classmethod
 	def from_dict(cls, data: dict[str, Any]) -> 'SectionContext':
+		if 'diagrams' not in data:
+			data['diagrams'] = None
 		return cls(**data)
 
 

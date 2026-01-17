@@ -8,6 +8,7 @@ from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.shared import Inches, Pt
 
 from src.core.context_manager import ContextManager
+from src.export.diagram_renderer import DiagramRenderer
 
 logger = logging.getLogger(__name__)
 
@@ -67,6 +68,10 @@ class WordExporter:
 		self.context_manager = context_manager
 		self.output_dir = Path(config.get('final_dir', 'output/final'))
 		self.citation_style = config.get('citation', {}).get('style', 'IEEE')
+
+		diagrams_dir = self.output_dir / 'diagrams'
+		self.diagram_renderer = DiagramRenderer(diagrams_dir)
+
 		self.references_seen = set()
 
 	def export(self, project_name: str, project_title: str, author: str) -> Path:
@@ -75,7 +80,8 @@ class WordExporter:
 		doc = Document()
 		self._setup_document_style(doc)
 		self._add_title_page(doc, project_title, author)
-		self._add_chapters(doc)
+		section_contexts = [self.context_manager.get_section(name) for name in self.context_manager.section_order]
+		self.diagram_renderer.render_all_diagrams(section_contexts)
 		self._add_references(doc)
 
 		self.output_dir.mkdir(parents=True, exist_ok=True)
@@ -103,6 +109,47 @@ class WordExporter:
 			section.left_margin = Inches(1)
 			section.right_margin = Inches(1)
 
+	def _add_chapters(self, doc, rendered_diagrams):
+		for chapter_title, section_names in CHAPTER_STRUCTURE.items():
+			doc.add_page_break()
+			chapter_heading = doc.add_heading(chapter_title, 0)
+			chapter_heading.alignment = WD_ALIGN_PARAGRAPH.CENTER
+
+			for section_name in section_names:
+				section_ctx = self.context_manager.get_section(section_name)
+				if not section_ctx:
+					logger.warning(f'Section not found: {section_name}')
+					continue
+
+				doc.add_heading(section_name, 1)
+				cleaned_content = self._remove_embedded_references(section_ctx.content)
+				self._add_markdown_content(doc, cleaned_content)
+
+				if hasattr(section_ctx, 'diagrams') and section_ctx.diagrams:
+					logger.debug(f'Section has {len(section_ctx.diagrams)} diagram(s)')
+					for diagram in section_ctx.diagrams:
+						diagram_key = f'{section_name}_{diagram["type"]}'
+						if diagram_key in rendered_diagrams:
+							self._add_diagram_to_doc(
+								doc, rendered_diagrams[diagram_key]['path'], rendered_diagrams[diagram_key]['caption']
+							)
+						else:
+							logger.warning(f'Diagram not rendered: {diagram_key}')
+
+				doc.add_paragraph()
+
+	def _add_diagram_to_doc(self, doc, image_path: Path, caption: str):
+		if not image_path or not image_path.exists():
+			logger.warning(f'Diagram not found: {image_path}')
+			return
+
+		doc.add_picture(str(image_path), width=Inches(6))
+
+		caption_para = doc.add_paragraph(caption)
+		caption_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+		caption_para.style = 'Caption'
+		doc.add_paragraph()
+
 	def _add_title_page(self, doc: Document, title: str, author: str):
 		for _ in range(6):
 			doc.add_paragraph()
@@ -122,31 +169,6 @@ class WordExporter:
 		date_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
 
 		doc.add_page_break()
-
-	def _add_chapters(self, doc: Document):
-		for chapter_title, section_names in CHAPTER_STRUCTURE.items():
-			doc.add_page_break()
-
-			chapter_heading = doc.add_heading(chapter_title, 0)
-			chapter_heading.alignment = WD_ALIGN_PARAGRAPH.CENTER
-
-			doc.add_paragraph()
-
-			for section_name in section_names:
-				section_ctx = self.context_manager.get_section(section_name)
-				if not section_ctx:
-					logger.warning(f'Section not found: {section_name}')
-					continue
-
-				logger.debug(f'Adding section: {section_name}')
-
-				doc.add_heading(section_name, 1)
-
-				cleaned_content = self._remove_embedded_references(section_ctx.content)
-
-				self._add_markdown_content(doc, cleaned_content)
-
-				doc.add_paragraph()
 
 	def _remove_embedded_references(self, content: str) -> str:
 		ref_header_pattern = r'(?:^|\n)#{1,3}\s*References?\s*\n'
@@ -177,22 +199,38 @@ class WordExporter:
 		return '\n'.join(cleaned_lines)
 
 	def _add_markdown_content(self, doc: Document, markdown_text: str):
-		markdown_text = self._process_tables(doc, markdown_text)
-		paragraphs = markdown_text.split('\n\n')
+		lines = markdown_text.split('\n')
 
-		for para_text in paragraphs:
-			para_text = para_text.strip()
-			if not para_text:
+		i = 0
+		while i < len(lines):
+			line = lines[i]
+
+			header_match = re.match(r'^(#{1,6})\s+(.+)$', line)
+			if header_match:
+				level = len(header_match.group(1))
+				text = header_match.group(2).strip()
+
+				doc.add_heading(text, level=level)
+				i += 1
 				continue
 
-			if para_text.startswith('- ') or para_text.startswith('* '):
-				self._add_bullet_list(doc, para_text)
-			elif re.match(r'^\d+\.', para_text):
-				self._add_numbered_list(doc, para_text)
-			elif para_text.startswith('```'):
-				self._add_code_block(doc, para_text)
-			else:
-				self._add_formatted_paragraph(doc, para_text)
+			markdown_text = self._process_tables(doc, markdown_text)
+			paragraphs = markdown_text.split('\n\n')
+
+			for para_text in paragraphs:
+				para_text = para_text.strip()
+				if not para_text:
+					continue
+
+				if para_text.startswith('- ') or para_text.startswith('* '):
+					self._add_bullet_list(doc, para_text)
+				elif re.match(r'^\d+\.', para_text):
+					self._add_numbered_list(doc, para_text)
+				elif para_text.startswith('```'):
+					self._detect_and_process_code_blocks(doc, para_text)
+				else:
+					self._add_formatted_paragraph(doc, para_text)
+		i += 1
 
 	def _process_tables(self, doc: Document, text: str) -> str:
 		table_pattern = r'\|(.+?)\|[\r\n]+\|[\s:|-]+\|[\r\n]+((?:\|.+?\|[\r\n]*)+)'
@@ -290,25 +328,40 @@ class WordExporter:
 				content = re.sub(r'^\d+\.\s*', '', line)
 				doc.add_paragraph(content, style='List Number')
 
-	def _add_code_block(self, doc: Document, text: str):
-		code = re.sub(r'^```\w*\n?|```$', '', text, flags=re.MULTILINE).strip()
+	def _detect_and_process_code_blocks(self, doc: Document, text: str) -> str:
+		"""Extract code blocks and replace with Word elements"""
 
-		if not code:
-			return
+		# Pattern that handles variations
+		code_block_pattern = r'```(?P<lang>\w*)\s*\n(?P<code>.*?)\n\s*```'
 
-		para = doc.add_paragraph(code)
-		para.style = 'Normal'
+		def replace_code(match):
+			lang = match.group('lang') or 'code'
+			code = match.group('code')
 
-		for run in para.runs:
-			run.font.name = 'Courier New'
-			run.font.size = Pt(10)
+			# Add to document
+			para = doc.add_paragraph(code.strip())
+			para.style = 'Normal'
 
-		from docx.oxml import OxmlElement
-		from docx.oxml.ns import qn
+			for run in para.runs:
+				run.font.name = 'Courier New'
+				run.font.size = Pt(10)
 
-		shading_elm = OxmlElement('w:shd')
-		shading_elm.set(qn('w:fill'), 'F0F0F0')
-		para._element.get_or_add_pPr().append(shading_elm)
+			# Add language label if provided
+			if lang != 'code':
+				label_para = doc.add_paragraph(f'({lang})', style='Caption')
+				label_para.alignment = WD_ALIGN_PARAGRAPH
+
+			from docx.oxml import OxmlElement
+			from docx.oxml.ns import qn
+
+			shading_elm = OxmlElement('w:shd')
+			shading_elm.set(qn('w:fill'), 'F0F0F0')
+			para._element.get_or_add_pPr().append(shading_elm)
+
+			return ''  # Remove from text
+
+		text = re.sub(code_block_pattern, replace_code, text, flags=re.DOTALL)
+		return text
 
 	def _add_references(self, doc: Document):
 		if not self.context_manager.all_citations:

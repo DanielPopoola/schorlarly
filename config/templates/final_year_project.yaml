@@ -138,6 +138,9 @@ sections:
       min: 300
       max: 500
     depends_on: ["System Analysis"]
+    diagrams:
+     - type: "flowchart"
+       description: "High-level overview of the system processes"
 
   - name: "System Design"
     type: "evidence"
@@ -145,6 +148,9 @@ sections:
       min: 500
       max: 1000
     depends_on: ["System Analysis"]
+    diagrams:
+     - type: "architecture"
+       description: "Show the system layers and component interactions"
     
   - name: "Procedural Flowchart"
     type: "evidence"
@@ -152,6 +158,9 @@ sections:
       min: 200
       max: 400
     depends_on: ["Overview of the System Flowchart"]
+    diagrams:
+     - type: "flowchart"
+       description: "Detail the step-by-step process flow of the system"
     
   - name: "System Implementation"
     type: "evidence"

@@ -13,9 +13,8 @@ venv/
 ENV/
 
 # Output files
-output/state/*.json
-output/drafts/*.md
-output/final/*.docx
+output/
+
 
 # IDE
 .vscode/

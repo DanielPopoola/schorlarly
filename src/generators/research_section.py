@@ -50,6 +50,9 @@ class ResearchSectionGenerator(BaseGenerator):
 
 		logger.info(f'Using {len(valid_papers)} validated papers')
 
+		if len(valid_papers) == 0 and len(papers) > 0:
+			self.research_searcher.mark_query_failed(search_query, max_citations * 2)
+
 		base_prompt = self._build_base_prompt(section_config, context)
 		research_prompt = self._build_research_prompt(section_config, valid_papers, user_input)
 
