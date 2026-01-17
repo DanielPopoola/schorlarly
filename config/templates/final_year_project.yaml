@@ -148,9 +148,6 @@ sections:
       min: 500
       max: 1000
     depends_on: ["System Analysis"]
-    diagrams:
-     - type: "architecture"
-       description: "Show the system layers and component interactions"
     
   - name: "Procedural Flowchart"
     type: "evidence"

@@ -1,21 +1,26 @@
 import logging
 import re
 from abc import ABC, abstractmethod
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from src.core.config_loader import SectionConfig
 from src.core.context_manager import SectionContext
 from src.llm.client import LLMClient
 from src.parsers.input_parser import ProjectInput
 
+if TYPE_CHECKING:
+	from src.core.context_manager import ContextManager
+	from src.research.searcher import Paper
+
 logger = logging.getLogger(__name__)
 
 
 class BaseGenerator(ABC):
-	def __init__(self, llm_client: LLMClient, config: dict[str, Any]):
+	def __init__(self, llm_client: LLMClient, config: dict[str, Any], context_manager: 'ContextManager'):
 		self.llm_client = llm_client
 		self.writing_config = config.get('writing', {})
 		self.citation_config = config.get('citation', {})
+		self.context_manager = context_manager
 
 	@abstractmethod
 	def generate(
@@ -179,3 +184,16 @@ CONDENSED VERSION:"""
 		except Exception as e:
 			logger.warning(f'Failed to adjust content length: {e}')
 			return content
+
+	def _register_and_cite_papers(self, papers: list['Paper']) -> dict[int, 'Paper']:
+		"""Register papers with context manager and return number→paper mapping."""
+		if not self.context_manager:
+			logger.warning('No context_manager available for citation registration')
+			return {}
+
+		paper_citations = {}
+		for paper in papers:
+			global_num = self.context_manager.register_paper(paper)
+			paper_citations[global_num] = paper
+
+		return paper_citations

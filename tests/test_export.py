@@ -186,16 +186,16 @@ def test_word_export():
 	print('=' * 60 + '\n')
 
 	# Create mock context manager with test data
-	context_file = Path('output/state/test_export_context.json')
+	context_file = Path('output/state/academic_transcript_context.json')
 	context_manager = ContextManager(context_file)
 
 	# Add mock sections
-	mock_sections = create_mock_sections()
-	print(f'Creating document with {len(mock_sections)} sections...\n')
+	# mock_sections = create_mock_sections()
+	# print(f'Creating document with {len(mock_sections)} sections...\n')
 
-	for section in mock_sections:
-		context_manager.add_section(section)
-		print(f'✓ Added: {section.name} ({section.word_count} words, {len(section.citations)} citations)')
+	# for section in mock_sections:
+	# context_manager.add_section(section)
+	# print(f'✓ Added: {section.name} ({section.word_count} words, {len(section.citations)} citations)')
 
 	# Create exporter config
 	config = {
@@ -208,7 +208,7 @@ def test_word_export():
 
 	print('\nExporting to Word...')
 	output_path = exporter.export(
-		project_name='test_export', project_title='AI-Powered Course Registration System', author='Test Student'
+		project_name='test_export', project_title='BlockChain Secured Academic Transcript', author='Test Student'
 	)
 
 	# Verify output
@@ -247,74 +247,10 @@ def test_word_export():
 	return output_path
 
 
-def test_markdown_features():
-	"""Test specific markdown conversion features"""
-	print('\n' + '=' * 60)
-	print('Testing Markdown Feature Conversion')
-	print('=' * 60 + '\n')
-
-	context_manager = ContextManager()
-
-	# Section with various markdown features
-	test_section = SectionContext(
-		name='Markdown Feature Test',
-		content="""This section tests **all markdown features**.
-
-**Bold text** and *italic text* and `inline code` should all work.
-
-Here's a bullet list:
-- First item with **bold**
-- Second item with *italic*
-- Third item with `code`
-
-Here's a numbered list:
-1. First numbered item
-2. Second numbered item
-3. Third numbered item
-
-Here's a code block:
-```python
-def hello_world():
-    print("Hello, World!")
-    return True
-```
-
-And some more **bold** and *italic* text.""",
-		key_points=['Tests markdown features'],
-		citations=['[1]', '[2]'],
-		word_count=50,
-	)
-
-	context_manager.add_section(test_section)
-
-	config = {'final_dir': 'output/final', 'citation': {'style': 'IEEE'}}
-
-	exporter = WordExporter(context_manager, config)
-	output_path = exporter.export(
-		project_name='test_markdown_features', project_title='Markdown Feature Test', author='Test User'
-	)
-
-	print(f'✓ Created test document: {output_path}')
-	print('\nOpen the document and verify:')
-	print('- Bold text appears bold')
-	print('- Italic text appears italic')
-	print('- Code appears in monospace font')
-	print('- Bullet list is properly formatted')
-	print('- Numbered list is properly formatted')
-	print('- Code block is in monospace with proper spacing')
-
-	return output_path
-
-
 if __name__ == '__main__':
 	import sys
 
-	if len(sys.argv) > 1 and sys.argv[1] == 'markdown':
-		# Test markdown features specifically
-		test_markdown_features()
-	else:
-		# Full export test
-		test_word_export()
+	test_word_export()
 
 	print('\n' + '=' * 60)
 	print('All tests complete!')

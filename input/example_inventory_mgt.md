@@ -1,8 +1,8 @@
 # Project Configuration
-**Title:** Design and Implementation of an AI-Powered Smart Inventory Management System with Demand Forecasting  
-**Author:** Daniel Popoola 
-**Domain:** Machine Learning & Web Development  
-**Keywords:** Inventory Management, Demand Forecasting, LSTM Neural Networks, Full-Stack Development, Predictive Analytics, Supply Chain Optimization  
+Title: Design and Implementation of an AI-Powered Smart Inventory Management System with Demand Forecasting  
+Author: Daniel Popoola 
+Domain: Machine Learning & Web Development  
+Keywords: Inventory Management, Demand Forecasting, LSTM Neural Networks, Full-Stack Development, Predictive Analytics, Supply Chain Optimization  
 
 # Problem Statement
 In the current retail landscape, small to medium-sized enterprises (SMEs) often rely on manual entry or basic spreadsheet systems to manage their stock levels. These traditional methods are prone to human error and lack the capability to anticipate future market trends. Consequently, businesses frequently face two major issues: overstocking and understocking.
@@ -19,10 +19,10 @@ The proposed system is a comprehensive web-based platform that combines traditio
 The core innovation lies in the "Forecasting Module." By feeding historical sales data into a Long Short-Term Memory (LSTM) neural network, the system can predict the required stock levels for the upcoming month with high accuracy. When the system detects that predicted demand exceeds current stock, it automatically generates a "Smart Reorder" suggestion.
 
 Key features include:
-- **Real-time Dashboard:** Visualizes current stock levels and low-stock alerts.
-- **AI Demand Prediction:** Graphically displays predicted sales trends versus historical data.
-- **Automated Purchase Orders:** Generates PDF order forms when stock hits a calculated threshold.
-- **Role-Based Access:** Different permissions for warehouse staff and administrators.
+- Real-time Dashboard: Visualizes current stock levels and low-stock alerts.
+- AI Demand Prediction: Graphically displays predicted sales trends versus historical data.
+- Automated Purchase Orders: Generates PDF order forms when stock hits a calculated threshold.
+- Role-Based Access: Different permissions for warehouse staff and administrators.
 
 # Why This Approach
 I chose a hybrid architecture using a React frontend, a Node.js backend for core business logic, and a Python-based Flask microservice specifically for the Machine Learning components. This separation allows the heavy mathematical computations required for AI to be handled by Python’s optimized libraries without slowing down the user interface.
@@ -48,9 +48,9 @@ The system follows a Microservices-lite architecture to separate concerns betwee
 - **Deployment:** Docker containers.
 
 # Implementation Highlights
-- **LSTM Integration:** Implementing the time-series forecasting model required pre-processing raw sales data into "windows" of time. The model was trained on 2 years of synthetic sales data to recognize monthly patterns.
-- **The "Smart Threshold" Algorithm:** Instead of a static reorder point (e.g., "reorder at 10 units"), I implemented a dynamic threshold calculated as: `(Average Daily Lead Time * Predicted Daily Demand) + Safety Stock`.
-- **API Gateway Logic:** I implemented a custom middleware in the Node.js backend to proxy forecasting requests to the Python service, ensuring the frontend only needs to communicate with one base URL.
+- LSTM Integration: Implementing the time-series forecasting model required pre-processing raw sales data into "windows" of time. The model was trained on 2 years of synthetic sales data to recognize monthly patterns.
+- The "Smart Threshold" Algorithm: Instead of a static reorder point (e.g., "reorder at 10 units"), I implemented a dynamic threshold calculated as: `(Average Daily Lead Time * Predicted Daily Demand) + Safety Stock`.
+- API Gateway Logic: I implemented a custom middleware in the Node.js backend to proxy forecasting requests to the Python service, ensuring the frontend only needs to communicate with one base URL.
 
 # Test Results
 - **Model Accuracy:** The LSTM model achieved a Mean Absolute Percentage Error (MAPE) of 11.4%, significantly outperforming the 24% error rate of the previous manual estimation method.

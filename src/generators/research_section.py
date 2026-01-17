@@ -1,5 +1,5 @@
 import logging
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from src.core.config_loader import SectionConfig
 from src.core.context_manager import SectionContext
@@ -11,6 +11,9 @@ from src.research.validator import CitationValidator
 
 logger = logging.getLogger(__name__)
 
+if TYPE_CHECKING:
+	from src.core.context_manager import ContextManager
+
 
 class ResearchSectionGenerator(BaseGenerator):
 	def __init__(
@@ -19,8 +22,9 @@ class ResearchSectionGenerator(BaseGenerator):
 		config: dict[str, Any],
 		research_searcher: ResearchSearcher,
 		citation_validator: CitationValidator,
+		context_manager: 'ContextManager',
 	):
-		super().__init__(llm_client, config)
+		super().__init__(llm_client, config, context_manager)
 		self.research_searcher = research_searcher
 		self.citation_validator = citation_validator
 
@@ -53,8 +57,17 @@ class ResearchSectionGenerator(BaseGenerator):
 		if len(valid_papers) == 0 and len(papers) > 0:
 			self.research_searcher.mark_query_failed(search_query, max_citations * 2)
 
+		paper_citations = {}
+		citation_numbers = []
+		for paper in valid_papers:
+			global_num = self.context_manager.register_paper(paper)
+			paper_citations[global_num] = paper
+			citation_numbers.append(global_num)
+
+		logger.info(f'Registered citations: {citation_numbers}')
+
 		base_prompt = self._build_base_prompt(section_config, context)
-		research_prompt = self._build_research_prompt(section_config, valid_papers, user_input)
+		research_prompt = self._build_research_prompt(section_config, valid_papers, user_input, citation_numbers)
 
 		full_prompt = base_prompt + research_prompt
 
@@ -78,6 +91,18 @@ class ResearchSectionGenerator(BaseGenerator):
 
 		logger.info(f'Generated {word_count} words, {len(key_points)} key points, {len(citations)} citations')
 
+		paper_references = [
+			{
+				'number': num,
+				'title': paper.title,
+				'authors': paper.authors,
+				'year': paper.year,
+				'url': paper.url,
+				'source': paper.source,
+			}
+			for num, paper in sorted(paper_citations.items())
+		]
+
 		return SectionContext(
 			name=section_config.name,
 			content=content,
@@ -85,6 +110,7 @@ class ResearchSectionGenerator(BaseGenerator):
 			citations=citations,
 			word_count=word_count,
 			terms_defined=[],
+			paper_references=paper_references,
 		)
 
 	def _build_search_query(
@@ -106,51 +132,63 @@ class ResearchSectionGenerator(BaseGenerator):
 			return ' '.join([domain] + keywords[:5])
 
 	def _build_research_prompt(
-		self, section_config: SectionConfig, papers: list[Any], user_input: ProjectInput | None
+		self,
+		section_config: SectionConfig,
+		papers: list[Any],
+		user_input: ProjectInput | None,
+		citation_numbers: list[int],
 	) -> str:
-		"""Build section-specific prompt with research papers"""
 		section_name = section_config.name
 
 		papers_text = '\n\n'.join(
 			[
-				f'[{i + 1}] {p.title}\nAuthors: {", ".join(p.authors[:3])}\nYear: \
-				{p.year}\nAbstract: {p.abstract[:300]}...'
-				for i, p in enumerate(papers[:10])
+				f'[{citation_numbers[i]}] {p.title}\n'
+				f'Authors: {", ".join(p.authors[:3])}\n'
+				f'Year: {p.year}\n'
+				f'Abstract: {p.abstract[:300]}...'
+				for i, p in enumerate(papers[: len(citation_numbers)])  # Match papers to their numbers
 			]
 		)
 
 		if 'background' in section_name.lower():
 			focus = f"""Write a comprehensive background section covering:
-- Historical context of {user_input.domain if user_input else 'the field'}
-- Current state of research
-- Key developments and trends
-- Foundation for understanding the problem
+	- Historical context of {user_input.domain if user_input else 'the field'}
+	- Current state of research
+	- Key developments and trends
+	- Foundation for understanding the problem
 
-Synthesize information from these papers into a coherent narrative.
-DO NOT just list papers - weave them into the discussion."""
+	Synthesize information from these papers into a coherent narrative.
+	DO NOT just list papers - weave them into the discussion.
+
+	IMPORTANT: Use the EXACT citation numbers shown below. Do NOT renumber them as [1], [2], [3].
+	For example, if a paper is marked [5], cite it as [5] in your text, not [1]."""
 
 		elif 'existing' in section_name.lower():
 			focus = """Analyze existing approaches to the problem:
-- What solutions already exist?
-- What are their strengths?
-- What are their limitations?
-- How do they relate to each other?
+	- What solutions already exist?
+	- What are their strengths?
+	- What are their limitations?
+	- How do they relate to each other?
 
-Reference specific papers when discussing each approach."""
+	Reference specific papers when discussing each approach.
+
+	IMPORTANT: Use the EXACT citation numbers shown below."""
 
 		else:
-			focus = 'Synthesize these research findings into a coherent academic section.'
+			focus = """Synthesize these research findings into a coherent academic section.
+
+	IMPORTANT: Use the EXACT citation numbers shown below."""
 
 		prompt = f"""
-{focus}
+	{focus}
 
-RESEARCH PAPERS:
-{papers_text if papers else 'No specific papers provided. Use general knowledge of the field.'}
+	RESEARCH PAPERS (use these exact citation numbers):
+	{papers_text if papers else 'No specific papers provided. Use general knowledge of the field.'}
 
-PROJECT CONTEXT:
-Domain: {user_input.domain if user_input else 'Not specified'}
-Problem: {user_input.problem_statement[:300] if user_input else 'Not specified'}
+	PROJECT CONTEXT:
+	Domain: {user_input.domain if user_input else 'Not specified'}
+	Problem: {user_input.problem_statement[:300] if user_input else 'Not specified'}
 
-Write the section now:"""
+	Write the section now:"""
 
 		return prompt

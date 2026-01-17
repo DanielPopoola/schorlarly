@@ -44,7 +44,7 @@ class Orchestrator:
 		generator_config = {'writing': self.config.get_writing_config(), 'citation': self.config.get_citation_config()}
 
 		self.factory = GeneratorFactory(
-			self.llm_client, generator_config, self.research_searcher, self.citation_validator
+			self.llm_client, generator_config, self.research_searcher, self.citation_validator, self.context_manager
 		)
 
 		logger.info(f'Orchestrator initialized for project: {project_name}')

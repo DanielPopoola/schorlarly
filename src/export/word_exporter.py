@@ -81,7 +81,8 @@ class WordExporter:
 		self._setup_document_style(doc)
 		self._add_title_page(doc, project_title, author)
 		section_contexts = [self.context_manager.get_section(name) for name in self.context_manager.section_order]
-		self.diagram_renderer.render_all_diagrams(section_contexts)
+		rendered_diagrams = self.diagram_renderer.render_all_diagrams(section_contexts)
+		self._add_chapters(doc, rendered_diagrams)
 		self._add_references(doc)
 
 		self.output_dir.mkdir(parents=True, exist_ok=True)
@@ -171,66 +172,60 @@ class WordExporter:
 		doc.add_page_break()
 
 	def _remove_embedded_references(self, content: str) -> str:
-		ref_header_pattern = r'(?:^|\n)#{1,3}\s*References?\s*\n'
+		ref_header_pattern = r'(?:^|\n)#{1,3}\s*References?\s*\n.*'
+		cleaned = re.sub(ref_header_pattern, '', content, flags=re.IGNORECASE | re.DOTALL)
 
-		match = re.search(ref_header_pattern, content, re.IGNORECASE | re.MULTILINE)
-		if match:
-			self.references_seen.add(True)
-			return content[: match.start()].rstrip()
-
-		lines = content.split('\n')
+		# Remove lines that look like references: [1] Author, "Title"...
+		lines = cleaned.split('\n')
 		cleaned_lines = []
-		in_reference_list = False
 
 		for line in lines:
-			if re.match(r'^\[\d+\]\s+[A-Z]', line.strip()):
-				in_reference_list = True
-				self.references_seen.add(True)
+			# Skip lines that start with [number] followed by author-like text
+			if re.match(r'^\[\d+\]\s+[A-Z][\w\s,\.]+["\']', line.strip()):
 				continue
-
-			if in_reference_list:
-				if re.match(r'^\[\d+\]|^\s+[a-z]', line.strip()):
-					continue
-				else:
-					in_reference_list = False
-
 			cleaned_lines.append(line)
 
 		return '\n'.join(cleaned_lines)
 
 	def _add_markdown_content(self, doc: Document, markdown_text: str):
-		lines = markdown_text.split('\n')
+		# Split into blocks by double newlines to maintain paragraph structure
+		blocks = re.split(r'\n\n+', markdown_text)
 
-		i = 0
-		while i < len(lines):
-			line = lines[i]
+		for block in blocks:
+			block = block.strip()
+			if not block:
+				continue
 
-			header_match = re.match(r'^(#{1,6})\s+(.+)$', line)
+			# 1. Handle Tables (process_tables adds to doc and returns empty string if matched)
+			if '|' in block and '-' in block:
+				remaining = self._process_tables(doc, block)
+				if not remaining.strip():
+					continue
+				block = remaining.strip()
+
+			# 2. Handle Code Blocks (detect_and_process_code_blocks adds to doc and returns empty string if matched)
+			if block.startswith('```'):
+				remaining = self._detect_and_process_code_blocks(doc, block)
+				if not remaining.strip():
+					continue
+				block = remaining.strip()
+
+			# 3. Handle Headers
+			header_match = re.match(r'^(#{1,6})\s+(.+)$', block)
 			if header_match:
 				level = len(header_match.group(1))
 				text = header_match.group(2).strip()
-
 				doc.add_heading(text, level=level)
-				i += 1
 				continue
 
-			markdown_text = self._process_tables(doc, markdown_text)
-			paragraphs = markdown_text.split('\n\n')
-
-			for para_text in paragraphs:
-				para_text = para_text.strip()
-				if not para_text:
-					continue
-
-				if para_text.startswith('- ') or para_text.startswith('* '):
-					self._add_bullet_list(doc, para_text)
-				elif re.match(r'^\d+\.', para_text):
-					self._add_numbered_list(doc, para_text)
-				elif para_text.startswith('```'):
-					self._detect_and_process_code_blocks(doc, para_text)
-				else:
-					self._add_formatted_paragraph(doc, para_text)
-		i += 1
+			# 4. Handle Lists
+			if block.startswith('- ') or block.startswith('* '):
+				self._add_bullet_list(doc, block)
+			elif re.match(r'^\d+\.', block):
+				self._add_numbered_list(doc, block)
+			else:
+				# 5. Regular Paragraph
+				self._add_formatted_paragraph(doc, block)
 
 	def _process_tables(self, doc: Document, text: str) -> str:
 		table_pattern = r'\|(.+?)\|[\r\n]+\|[\s:|-]+\|[\r\n]+((?:\|.+?\|[\r\n]*)+)'
@@ -364,30 +359,54 @@ class WordExporter:
 		return text
 
 	def _add_references(self, doc: Document):
-		if not self.context_manager.all_citations:
-			logger.info('No citations to add')
+		if not self.context_manager.citation_registry:
+			logger.info('No citations in registry')
 			return
 
 		doc.add_page_break()
 		ref_heading = doc.add_heading('REFERENCES', 0)
 		ref_heading.alignment = WD_ALIGN_PARAGRAPH.CENTER
 
-		full_references = self._extract_full_references()
-
-		if not full_references:
-			logger.warning('No full references found, using citation markers only')
-			unique_citations = sorted(set(self.context_manager.all_citations))
-			for citation in unique_citations:
-				doc.add_paragraph(f'{citation} [Reference details not available]', style='Normal')
-		else:
-			sorted_refs = sorted(full_references.items(), key=lambda x: self._extract_citation_number(x[0]))
-
-			for _, reference in sorted_refs:
-				doc.add_paragraph(reference, style='Normal')
-
-		logger.info(
-			f'Added {len(full_references) if full_references else len(self.context_manager.all_citations)} citations'
+		# Sort by citation number
+		sorted_citations = sorted(
+			self.context_manager.citation_registry.items(),
+			key=lambda x: x[1][0],  # Sort by number (second element of tuple)
 		)
+
+		for _, (number, paper_dict) in sorted_citations:
+			reference_text = self._format_reference_ieee(number, paper_dict)
+			doc.add_paragraph(reference_text, style='Normal')
+
+		logger.info(f'Added {len(sorted_citations)} references')
+
+	def _format_reference_ieee(self, number: int, paper_dict: dict) -> str:
+		"""Format a single reference in IEEE style."""
+		authors = paper_dict.get('authors', [])
+
+		# Format authors: J. Smith, A. Doe
+		if authors:
+			author_str = ', '.join(
+				[
+					f'{a.split()[-1]}, {a.split()[0][0]}.' if ' ' in a else a
+					for a in authors[:3]  # Max 3 authors
+				]
+			)
+			if len(authors) > 3:
+				author_str += ', et al.'
+		else:
+			author_str = 'Unknown'
+
+		title = paper_dict.get('title', 'Untitled')
+		year = paper_dict.get('year', 'n.d.')
+		url = paper_dict.get('url', '')
+
+		# IEEE format: [1] A. Smith, "Title," Year. [Online]. Available: URL
+		reference = f'[{number}] {author_str}, "{title}," {year}.'
+
+		if url:
+			reference += f' [Online]. Available: {url}'
+
+		return reference
 
 	def _extract_full_references(self) -> dict[str, str]:
 		references = {}
@@ -431,8 +450,3 @@ class WordExporter:
 				references[num] = f'[{num}] Reference details not available'
 
 		return references
-
-	def _extract_citation_number(self, marker: str) -> int:
-		"""Extract numeric value from citation marker like [1]"""
-		match = re.search(r'\[(\d+)\]', marker)
-		return int(match.group(1)) if match else 999

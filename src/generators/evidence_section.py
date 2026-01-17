@@ -1,16 +1,23 @@
 import logging
 import re
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from src.core.config_loader import SectionConfig
 from src.core.context_manager import SectionContext
 from src.generators.base import BaseGenerator
+from src.llm.client import LLMClient
 from src.parsers.input_parser import ProjectInput
 
 logger = logging.getLogger(__name__)
 
+if TYPE_CHECKING:
+	from src.core.context_manager import ContextManager
+
 
 class EvidenceSectionGenerator(BaseGenerator):
+	def __init__(self, llm_client: LLMClient, config: dict[str, Any], context_manager: 'ContextManager'):
+		super().__init__(llm_client, config, context_manager)
+
 	def generate(
 		self, section_config: SectionConfig, user_input: ProjectInput | None, context: dict[str, Any]
 	) -> SectionContext:

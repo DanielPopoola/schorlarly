@@ -1,7 +1,10 @@
 import json
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+	from src.research.searcher import Paper
 
 
 @dataclass
@@ -13,6 +16,7 @@ class SectionContext:
 	word_count: int
 	terms_defined: list[str] | None = None
 	diagrams: list[dict] | None = None
+	paper_references: list[dict] | None = None
 
 	def to_dict(self) -> dict[str, Any]:
 		return asdict(self)
@@ -21,6 +25,8 @@ class SectionContext:
 	def from_dict(cls, data: dict[str, Any]) -> 'SectionContext':
 		if 'diagrams' not in data:
 			data['diagrams'] = None
+		if 'paper_references' not in data:
+			data['paper_references'] = None
 		return cls(**data)
 
 
@@ -31,6 +37,8 @@ class ContextManager:
 		self.all_terms_defined: list[str] = []
 		self.section_order: list[str] = []
 		self.state_file = state_file
+		self.citation_registry: dict[str, tuple[int, dict]] = {}  # key → (number, paper_dict)
+		self.next_citation_num = 1
 
 	def add_section(self, section_context: SectionContext):
 		self.sections[section_context.name] = section_context
@@ -67,6 +75,30 @@ class ContextManager:
 			all_points.extend(section.key_points)
 		return all_points
 
+	def register_paper(self, paper: 'Paper') -> int:
+		key = self._make_paper_key(paper)
+		if key in self.citation_registry:
+			return self.citation_registry[key][0]
+
+		num = self.next_citation_num
+		paper_dict = {
+			'title': paper.title,
+			'authors': paper.authors,
+			'year': paper.year,
+			'url': paper.url,
+			'abstract': paper.abstract[:200],  # Truncate for storage
+			'source': paper.source,
+		}
+		self.citation_registry[key] = (num, paper_dict)
+		self.next_citation_num += 1
+
+		return num
+
+	def _make_paper_key(self, paper: 'Paper') -> str:
+		title_clean = ''.join(c for c in paper.title.lower() if c.isalnum() or c.isspace())
+		title_short = '_'.join(title_clean.split()[:5])
+		return f'{title_short}_{paper.year or "unknown"}'
+
 	def has_citation(self, citation: str) -> bool:
 		return citation in self.all_citations
 
@@ -94,6 +126,10 @@ class ContextManager:
 			'section_order': self.section_order,
 			'all_citations': self.all_citations,
 			'all_terms_defined': self.all_terms_defined,
+			'citation_registry': {
+				key: {'number': num, 'paper': paper_dict} for key, (num, paper_dict) in self.citation_registry.items()
+			},
+			'next_citation_num': self.next_citation_num,
 		}
 
 		self.state_file.parent.mkdir(parents=True, exist_ok=True)
@@ -111,6 +147,11 @@ class ContextManager:
 		self.section_order = state['section_order']
 		self.all_citations = state['all_citations']
 		self.all_terms_defined = state['all_terms_defined']
+		if 'citation_registry' in state:
+			self.citation_registry = {
+				key: (data['number'], data['paper']) for key, data in state['citation_registry'].items()
+			}
+			self.next_citation_num = state.get('next_citation_num', 1)
 
 	def clear(self):
 		self.sections.clear()

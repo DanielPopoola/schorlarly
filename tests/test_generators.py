@@ -1,6 +1,7 @@
 from pathlib import Path
 
 from src.core.config_loader import SectionConfig, get_config
+from src.core.context_manager import ContextManager
 from src.generators import GeneratorFactory
 from src.llm.client import create_llm_client_from_config
 from src.parsers.input_parser import InputParser
@@ -24,9 +25,12 @@ def test_generator(generator_type: str):
 	research_searcher = ResearchSearcher(config.get_research_config())
 	citation_validator = CitationValidator(llm_client, config.get_citation_config())
 
+	context_file = Path('output/state/test_context.json')
+	context_manager = ContextManager(context_file)
+
 	config_dict = {'writing': config.get_writing_config(), 'citation': config.get_citation_config()}
 
-	factory = GeneratorFactory(llm_client, config_dict, research_searcher, citation_validator)
+	factory = GeneratorFactory(llm_client, config_dict, research_searcher, citation_validator, context_manager)
 
 	# Load test input
 	input_file = Path('input/example_course_registration.md')
