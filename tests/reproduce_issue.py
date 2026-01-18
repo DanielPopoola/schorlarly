@@ -9,7 +9,7 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(level
 
 
 def reproduce():
-	context_file = Path('output/state/inventor_mgt_context.json')
+	context_file = Path('output/state/medical_diagnosis_context.json')
 	if not context_file.exists():
 		print(f'Error: Context file {context_file} not found.')
 		return
@@ -26,9 +26,9 @@ def reproduce():
 
 	exporter = WordExporter(context_manager, config)
 
-	project_name = 'reproduced_inventor_mgt'
+	project_name = 'reproduced_medical_diagnosis'
 	project_title = (
-		'Design and Implementation of an AI-Powered Smart Inventory Management System with Demand Forecasting'
+		'Design and Implementation of a Privacy-Preserving Medical Diagnosis System using Federated Learning  '
 	)
 	author = 'Daniel Popoola'
 

@@ -354,7 +354,7 @@ class WordExporter:
 			# Add language label if provided
 			if lang != 'code':
 				label_para = doc.add_paragraph(f'({lang})', style='Caption')
-				label_para.alignment = WD_ALIGN_PARAGRAPH
+				label_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
 
 			from docx.oxml import OxmlElement
 			from docx.oxml.ns import qn
