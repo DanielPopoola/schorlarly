@@ -54,20 +54,45 @@ class ContextManager:
 	def get_section(self, name: str) -> SectionContext | None:
 		return self.sections.get(name)
 
-	def get_context_for_section(self, section_name: str, dependencies: list[str]) -> dict[str, Any]:
-		dependent_sections: dict[str, Any] = {}
-		for dep_name in dependencies:
-			if dep_name in self.sections:
-				dependent_sections[dep_name] = {'name': dep_name}
-
+	def get_context_for_section(self, section_name: str) -> dict[str, Any]:
 		return {
 			'section_name': section_name,
 			'previously_completed': self.section_order.copy(),
-			'dependent_sections': dependent_sections,
-			'all_citations_used': self.all_citations.copy(),
-			'all_terms_defined': self.all_terms_defined.copy(),
-			'key_points_covered': self._get_all_key_points()[:30],
+			#'all_citations_used': self.all_citations.copy(),
+			#'all_terms_defined': self.all_terms_defined.copy(),
+			#'key_points_covered': self._get_all_key_points()[:30],
 		}
+
+	def get_dependency_content(self, dependency_names: list[str]) -> dict[str, str]:
+		content = {}
+		for dep_name in dependency_names:
+			if dep_name in self.sections:
+				section_ctx = self.sections[dep_name]
+				content[dep_name] = {'key_points': section_ctx.key_points, 'preview': section_ctx.content[:200]}
+		return content
+
+	def get_exclusion_snippets(self, count: int = 2, min_gap: int = 2) -> list[dict]:
+		if len(self.section_order) < min_gap + 1:
+			return []
+
+		snippets = []
+		check_sections = self.section_order[:-min_gap] if len(self.section_order) > min_gap else []
+
+		for section_name in check_sections[-count:]:
+			section_ctx = self.sections.get(section_name)
+			if not section_ctx:
+				continue
+
+			first_sentence = section_ctx.content.split('.')[0] + '.'
+
+			snippets.append(
+				{
+					'section_name': section_name,
+					'snippet': first_sentence,
+				}
+			)
+
+		return snippets
 
 	def _get_all_key_points(self) -> list[str]:
 		all_points = []

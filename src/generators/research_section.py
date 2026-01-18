@@ -74,7 +74,7 @@ class ResearchSectionGenerator(BaseGenerator):
 		content = self.llm_client.generate(
 			full_prompt, temperature=0.7, max_tokens=section_config.word_count['max'] * 2
 		)
-
+		content = self._remove_section_title_from_content(content, section_config.name)
 		valid, word_count = self._validate_word_count(
 			content, section_config.word_count['min'], section_config.word_count['max']
 		)

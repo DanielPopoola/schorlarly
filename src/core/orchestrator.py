@@ -71,7 +71,7 @@ class Orchestrator:
 		logger.info(f'Generating section: {section_config.name}')
 		self.state_manager.set_section_status(section_config.name, SectionStatus.IN_PROGRESS)
 
-		context = self.context_manager.get_context_for_section(section_config.name, section_config.depends_on)
+		context = self.context_manager.get_context_for_section(section_config.name)
 		for dep in section_config.depends_on:
 			dep_status = self.state_manager.get_section_status(dep)
 			if dep_status != SectionStatus.COMPLETED:

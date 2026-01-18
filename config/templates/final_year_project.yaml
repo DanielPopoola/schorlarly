@@ -6,17 +6,17 @@ template:
 # Section definitions
 sections:
   - name: "Introduction"
-    type: "interactive"
+    type: "evidence"
     word_count:
-      min: 300
-      max: 500
+      min: 200
+      max: 400
     depends_on: []
     
   - name: "Background to the Study"
     type: "research"
     word_count:
       min: 500
-      max: 1000
+      max: 800
     depends_on: ["Introduction"]
     research:
       required: true
@@ -24,14 +24,14 @@ sections:
       max_citations: 10
     
   - name: "Statement of the Problem"
-    type: "interactive"
+    type: "evidence"
     word_count:
       min: 200
       max: 400
     depends_on: ["Background to the Study"]
     
   - name: "Objective of the Study"
-    type: "interactive"
+    type: "evidence"
     word_count:
       min: 150
       max: 300
@@ -45,14 +45,14 @@ sections:
     depends_on: ["Objective of the Study"]
     
   - name: "Scope of the Study"
-    type: "interactive"
+    type: "evidence"
     word_count:
       min: 200
       max: 350
     depends_on: []
     
   - name: "Limitations"
-    type: "interactive"
+    type: "evidence"
     word_count:
       min: 150
       max: 300
@@ -91,7 +91,7 @@ sections:
     depends_on: ["Existing Approach to Problem Identified"]
     
   - name: "Specific Approach to Problem Identified"
-    type: "interactive"
+    type: "evidence"
     word_count:
       min: 400
       max: 600
@@ -105,7 +105,7 @@ sections:
     depends_on: ["Specific Approach to Problem Identified"]
     
   - name: "Method of Data Collection"
-    type: "interactive"
+    type: "evidence"
     word_count:
       min: 300
       max: 500

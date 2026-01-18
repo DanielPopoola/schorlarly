@@ -10,7 +10,6 @@ from src.parsers.input_parser import ProjectInput
 
 if TYPE_CHECKING:
 	from src.core.context_manager import ContextManager
-	from src.research.searcher import Paper
 
 logger = logging.getLogger(__name__)
 
@@ -34,8 +33,20 @@ class BaseGenerator(ABC):
 		min_words = section_config.word_count['min']
 		max_words = section_config.word_count['max']
 
-		covered = context.get('key_points_covered', [])
-		covered_str = '\n- '.join(covered[:10]) if covered else 'None yet'
+		previous_count = len(context.get('previously_completed', []))
+		if previous_count >= 3:
+			exclusion_snippets = self.context_manager.get_exclusion_snippets(count=5, min_gap=2)
+
+			if exclusion_snippets:
+				exclusion_text = 'AVOID REPEATING THESE FRAMINGS:\n'
+				for item in exclusion_snippets:
+					exclusion_text += f'- [{item["section_name"]}]: {item["snippet"]}\n'
+				exclusion_text += '\n'
+			else:
+				exclusion_text = ''
+		else:
+			exclusion_text = ''
+
 		if citation_style == 'IEEE':
 			citation_example = """
 	Use numbered citations like this:
@@ -60,8 +71,7 @@ REQUIREMENTS:
 - Word count: {min_words}-{max_words} words
 - Use third person, avoid "I/we"
 
-ALREADY COVERED (do NOT repeat these):
-- {covered_str}
+{exclusion_text}
 
 CRITICAL: Be absolutely consistent. Do not mix citation styles.
 """
@@ -185,15 +195,15 @@ CONDENSED VERSION:"""
 			logger.warning(f'Failed to adjust content length: {e}')
 			return content
 
-	def _register_and_cite_papers(self, papers: list['Paper']) -> dict[int, 'Paper']:
-		"""Register papers with context manager and return number→paper mapping."""
-		if not self.context_manager:
-			logger.warning('No context_manager available for citation registration')
-			return {}
+	def _remove_section_title_from_content(self, content: str, section_name: str) -> str:
+		lines = content.strip().split('\n')
 
-		paper_citations = {}
-		for paper in papers:
-			global_num = self.context_manager.register_paper(paper)
-			paper_citations[global_num] = paper
+		for i, line in enumerate(lines):
+			if line.strip():
+				if line.strip().lower() == section_name.lower():
+					return '\n'.join(lines[i + 1 :])
+				if re.match(rf'^#{1, 3}\s*{re.escape(section_name)}\s*$', line.strip(), re.IGNORECASE):
+					return '\n'.join(lines[i + 1 :])
+				break
 
-		return paper_citations
+		return content

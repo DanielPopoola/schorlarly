@@ -144,6 +144,16 @@ class WordExporter:
 			logger.warning(f'Diagram not found: {image_path}')
 			return
 
+		from PIL import Image
+
+		with Image.open(image_path) as img:
+			width_px, height_px = img.size
+
+		width_inches = width_px / 96
+		height_inches = height_px / 96
+
+		logger.info(f'Inserting diagram: {width_inches:.2f}" × {height_inches:.2f}"')
+
 		doc.add_picture(str(image_path), width=Inches(6))
 
 		caption_para = doc.add_paragraph(caption)

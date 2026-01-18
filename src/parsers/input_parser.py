@@ -21,6 +21,9 @@ class ProjectInput:
 	dependencies: str
 	implementation_highlights: str = ''
 	test_results: str = ''
+	data_source: str = ''
+	testing_strategy: str = ''
+	actual_limitations: str = ''
 
 	# Additional context
 	raw_content: str = ''
@@ -60,6 +63,9 @@ class InputParser:
 			dependencies=sections.get('Dependencies', ''),
 			implementation_highlights=sections.get('Implementation Highlights', ''),
 			test_results=sections.get('Test Results', ''),
+			data_source=sections.get('Data & Testing Strategy', ''),
+			testing_strategy=sections.get('Data & Testing Strategy', ''),
+			actual_limitations=sections.get('Limitations You Faced', ''),
 			raw_content=content,
 		)
 

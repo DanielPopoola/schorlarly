@@ -50,6 +50,7 @@ class AutomatedSectionGenerator(BaseGenerator):
 			Second key insight\n...'
 			content_raw = self.llm_client.generate(base_prompt + generic_prompt, temperature=0.5)
 
+		content = self._remove_section_title_from_content(content_raw, section_config.name)
 		content, key_points = self._parse_combined_response(content_raw)
 
 		valid, word_count = self._validate_word_count(

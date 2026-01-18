@@ -28,6 +28,12 @@ class EvidenceSectionGenerator(BaseGenerator):
 
 		# Extract relevant evidence based on section type
 		evidence = self._extract_evidence(section_config.name, user_input)
+		if section_config.depends_on:
+			dependency_content = self.context_manager.get_dependency_content(section_config.depends_on)
+			if dependency_content:
+				evidence += '\n\nRELATED SECTIONS:\n'
+				for dep_name, dep_data in dependency_content.items():
+					evidence += f'{dep_name}: {dep_data["preview"]}\n'  # type: ignore
 
 		# Handle code-required sections
 		code_snippet = None
@@ -44,7 +50,7 @@ class EvidenceSectionGenerator(BaseGenerator):
 		content_raw = self.llm_client.generate(
 			full_prompt, temperature=0.6, max_tokens=section_config.word_count['max'] * 2
 		)
-
+		content = self._remove_section_title_from_content(content_raw, section_config.name)
 		content, key_points = self._parse_combined_response(content_raw)
 
 		# Adjust word count if needed
@@ -142,8 +148,14 @@ SOLUTION OVERVIEW:
 ARCHITECTURE:
 {user_input.system_architecture}"""
 
+		elif 'limitation' in name_lower:
+			return f"""USER'S ACTUAL LIMITATIONS:
+{user_input.actual_limitations}
+
+ARCHITECTURE CONTEXT:
+{user_input.system_architecture[:300]}"""
+
 		else:
-			# Default: provide general context
 			return f"""SOLUTION: {user_input.solution}
 ARCHITECTURE: {user_input.system_architecture}
 IMPLEMENTATION: {user_input.implementation_highlights}"""
@@ -255,35 +267,49 @@ IMPLEMENTATION: {user_input.implementation_highlights}"""
 		"""Build section-specific prompt with evidence"""
 		name_lower = section_config.name.lower()
 
-		if 'system analysis' in name_lower:
-			prompt = f"""Write a System Analysis section that:
-- Analyzes the current system/problem state
-- Identifies inefficiencies and bottlenecks
-- Justifies the need for a new solution
-- References the problem statement
+		base_instruction = """
+CRITICAL RULES:
+1. Only describe information from the evidence below
+2. Do NOT add generic statements about "the retail landscape"
+3. Do NOT invent technical details not in the evidence
+4. If evidence is sparse, write a shorter section - DO NOT PAD
+"""
 
-EVIDENCE:
+		if 'system analysis' in name_lower:
+			prompt = f"""{base_instruction}
+
+Write System Analysis covering:
+- The specific problem from user's input
+- Why current approach is inadequate
+- What the new system must accomplish
+
+EVIDENCE (this is ALL you can use):
 {evidence}
 
-Write in formal academic tone. Focus on analytical insights, not just description."""
+Write now (be concise if evidence is limited):
+"""
 
 		elif 'system design' in name_lower:
-			prompt = f"""Write a System Design section that:
-- Describes the overall architecture
-- Explains component interactions
-- Justifies design decisions
-- Uses technical diagrams descriptions where helpful
+			prompt = f"""{base_instruction}
 
-DESIGN DETAILS:
+Describe the architecture the user provided:
+- Component breakdown
+- How components interact
+- Technology choices and why
+
+ARCHITECTURE DETAILS:
 {evidence}
 
-Explain both WHAT the system does and WHY you designed it this way."""
+Write now:
+
+"""
 
 		elif 'implementation' in name_lower:
 			code_context = f'\n\nIMPLEMENTATION CODE/DETAILS:\n{code_snippet}' if code_snippet else ''
 
-			prompt = f"""Write a System Implementation section that:
-- Describes the actual implementation
+			prompt = f"""{base_instruction}
+
+- Describe the implementation details the user provided
 - Explains key algorithms and logic
 - Discusses interesting technical solutions
 - References specific technologies used
@@ -291,11 +317,14 @@ Explain both WHAT the system does and WHY you designed it this way."""
 IMPLEMENTATION EVIDENCE:
 {evidence}{code_context}
 
-Be technical but clear. Explain complex parts in detail."""
+Write now:
+."""
 
 		elif 'test' in name_lower:
-			prompt = f"""Write a Test-Run section that:
-- Presents test methodology
+			prompt = f"""{base_instruction}
+
+Write a Test-Run section that:
+- Presents test methodology/testing strategy
 - Shows actual test results (use tables if provided)
 - Analyzes the results
 - Discusses performance metrics
@@ -306,7 +335,9 @@ TEST DATA:
 Present data clearly. Use tables for numeric results. Analyze what the results mean."""
 
 		elif 'flowchart' in name_lower:
-			prompt = f"""Write a section describing the system flowchart:
+			prompt = f"""{base_instruction}
+			
+Write a section describing the system flowchart:
 - Explain the overall process flow
 - Describe key decision points
 - Show how data moves through the system
@@ -318,7 +349,9 @@ SYSTEM CONTEXT:
 Describe the flow step-by-step. Make it easy to visualize."""
 
 		elif 'documentation' in name_lower:
-			prompt = f"""Write a Program Documentation section that:
+			prompt = f"""{base_instruction}
+			
+Write a Program Documentation section that:
 - Documents the codebase structure
 - Explains major modules/components
 - Describes key functions and their purposes
@@ -330,9 +363,8 @@ IMPLEMENTATION:
 Focus on helping future developers understand the code."""
 
 		else:
-			prompt = f"""Write the {section_config.name} section using this evidence:
-
-{evidence}
+			prompt = f"""Write the {section_config.name} section strictly following these
+			instructions {base_instruction}
 
 Maintain academic formal tone."""
 

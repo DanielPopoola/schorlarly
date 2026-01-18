@@ -77,3 +77,27 @@ Infrastructure:
 - Docker
 - PostgreSQL 15
 - Redis
+
+# Data & Testing Strategy
+[Describe your actual approach - be honest]
+
+Did you:
+- Use a public dataset? (Name it: Kaggle XYZ, GitHub repo, etc.)
+- Generate synthetic data? (Explain the generation process)
+- Use real company data? (Mention with anonymization)
+
+Testing approach:
+- What did you test? (Unit tests, integration tests, user testing)
+- How many test cases?
+- Any performance benchmarks?
+
+# Limitations You Faced
+[What did you TRY to do but couldn't achieve?]
+
+Technical constraints:
+- "Wanted real-time updates but limited to 10-sec intervals due to..."
+- "LSTM needs 2 years data, only had 6 months available"
+
+Design trade-offs:
+- "Chose microservices over monolith → increased deployment complexity"
+- "Used free-tier cloud → limited to 100 concurrent users"

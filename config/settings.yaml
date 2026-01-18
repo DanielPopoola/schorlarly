@@ -5,7 +5,7 @@ project:
 # LLM Configuration
 llm:
   provider: "openrouter"  # or "anthropic"
-  model: "xiaomi/mimo-v2-flash:free"
+  model: "openai/gpt-oss-120b:free"
   api_key_env: "LLM_API_KEY"
   temperature: 0.7
   max_tokens: 4000
@@ -29,8 +29,8 @@ citation:
   validation:
     existence_check: true
     relevance_check: true
-    min_relevance_score: 0.2
-    auto_accept_score: 0.6
+    min_relevance_score: 0.3
+    auto_accept_score: 0.7
 
 # Writing Style
 writing:

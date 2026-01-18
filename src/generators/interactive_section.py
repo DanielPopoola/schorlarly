@@ -95,7 +95,7 @@ class InteractiveSectionGenerator(BaseGenerator):
 		content_raw = self.llm_client.generate(
 			full_prompt, temperature=0.7, max_tokens=section_config.word_count['max'] * 2
 		)
-
+		content = self._remove_section_title_from_content(content_raw, section_config.name)
 		content, key_points = self._parse_combined_response(content_raw)
 
 		valid, word_count = self._validate_word_count(
